@@ -1,0 +1,255 @@
+# =============================================================================
+# file_structure.yaml
+# CMG IMEX 与 Petrel Eclipse 文件结构规则
+# 供Parser识别文件结构，供Generator生成正确格式
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# CMG IMEX 文件结构
+# -----------------------------------------------------------------------------
+cmg_imex:
+
+  file_extension: ".dat"
+  unit_system_keyword: "*INUNIT"
+  unit_systems:
+    field: "*FIELD"
+    si: "*SI"
+    lab: "*LAB"
+
+  # 注释规则
+  comment:
+    symbol: "**"             # 双星号，行内**之后全部为注释
+    inline_allowed: true     # 可以在关键字同行后面加注释
+    example: "** 这是注释"
+
+  # 关键字规则
+  keyword:
+    prefix: "*"              # 所有CMG关键字以*开头
+    case_sensitive: false    # 不区分大小写
+    example: "*GRID *PORO *PERMI"
+
+  # 数组规则
+  array:
+    terminator: null         # 无结束符，遇到下一个*关键字即结束
+    repeat_syntax: null      # 无内置重复语法（不像Petrel的N*value）
+    multiline: true          # 数组值可以跨多行
+
+  # 快捷方式
+  shortcuts:
+    CON: "全场常数，*PORO *CON 0.3 表示孔隙度全场等于0.3"
+    KVAR: "按K层给值，每层一个值，*PERMI *KVAR\n200 50 500"
+    IVAR: "按I方向逐块给值"
+    JVAR: "按J方向逐块给值"
+    ALL:  "逐块给值，按IJK顺序排列"
+    IJK:  "用I J K范围指定，*POR *IJK 1:5 1:10 1:3 0.25"
+
+  # 文件区块（非显式声明，靠关键字归类）
+  blocks:
+    IO_CONTROL:
+      description: "I/O控制，输出设置"
+      keywords: ["*TITLE1", "*TITLE2", "*TITLE3", "*INUNIT", "*WPRN", "*OUTPRN", "*WSRF", "*OUTSRF"]
+    GRID:
+      description: "网格几何定义"
+      keywords: ["*GRID", "*DI", "*DJ", "*DK", "*DEPTH", "*DTOP", "*PAYDEPTH"]
+    RESERVOIR:
+      description: "储层岩石属性"
+      keywords: ["*POR", "*PERMI", "*PERMJ", "*PERMK", "*CPOR", "*PRPOR", "*NET2GROSS"]
+    FLUID:
+      description: "流体PVT属性"
+      keywords: ["*MODEL", "*PVT", "*DENSITY", "*CO", "*CVO", "*BWI", "*CW", "*REFPW", "*VWI", "*CVW"]
+    ROCKFLUID:
+      description: "岩石-流体相对渗透率"
+      keywords: ["*RPT", "*SWT", "*SLT", "*SGT"]
+    INITIAL:
+      description: "初始条件"
+      keywords: ["*VERTICAL", "*REFDEPTH", "*REFPRES", "*DWOC", "*DGOC", "*PB", "*SW", "*SO", "*SG", "*PRES"]
+    NUMERICAL:
+      description: "数值控制参数"
+      keywords: ["*DTMAX", "*DTMIN", "*MAXSTEPS", "*NORM", "*AIM", "*NEWTONCYC"]
+    WELL:
+      description: "井定义与动态数据"
+      keywords: ["*RUN", "*DATE", "*WELL", "*INJECTOR", "*PRODUCER", "*OPERATE", "*MONITOR",
+                 "*PERF", "*GEOMETRY", "*TIME", "*STOP", "*INCOMP", "*DTWELL"]
+
+  # 解析三种常见格式
+  value_formats:
+    single_inline:
+      description: "值与关键字在同一行"
+      example: "*CPOR 3.0E-6"
+      regex: r'^\*(\w+)\s+([\d.eE+\-]+)'
+
+    single_next_line:
+      description: "值在关键字的下一行"
+      example: "*DTMAX\n  1000."
+      regex: r'^\*(\w+)\s*$'   # 关键字行，值在下一非空行
+
+    array_multiline:
+      description: "数组值跨多行，直到下一个*关键字"
+      example: "*PERMI *KVAR\n  200.0   50.0  500.0"
+      termination: "遇到以*开头的非注释行即结束"
+
+    con_shortcut:
+      description: "*CON快捷方式，全场常数"
+      example: "*POR *CON 0.3"
+      regex: r'^\*(\w+)\s+\*CON\s+([\d.eE+\-]+)'
+
+    kvar_shortcut:
+      description: "*KVAR按层给值"
+      example: "*PERMI *KVAR\n  200.0  50.0  500.0"
+
+# -----------------------------------------------------------------------------
+# Petrel Eclipse 文件结构
+# -----------------------------------------------------------------------------
+petrel_eclipse:
+
+  file_extension: ".DATA"
+  unit_system_section: RUNSPEC
+  unit_systems:
+    metric: "METRIC"
+    field:  "FIELD"
+    lab:    "LAB"
+
+  # 注释规则
+  comment:
+    symbol: "--"             # 双连字符，行内--之后全部为注释
+    inline_allowed: true
+    example: "-- 这是注释"
+
+  # 关键字规则
+  keyword:
+    prefix: ""               # 无前缀，关键字直接写
+    case_sensitive: false
+    example: "GRID PORO PERMX"
+
+  # 数组规则
+  array:
+    terminator: "/"          # 斜杠结束数组
+    repeat_syntax: "N*value" # N个相同值的简写，如 300*0.3
+    multiline: true
+    example: "PORO\n  100*0.25 50*0.30 150*0.20 /"
+
+  # 文件区块（显式声明，有严格顺序）
+  blocks_order:
+    - RUNSPEC
+    - GRID
+    - EDIT
+    - PROPS
+    - REGIONS
+    - SOLUTION
+    - SUMMARY
+    - SCHEDULE
+
+  blocks:
+    RUNSPEC:
+      description: "运行规格，模型基本设置"
+      required_keywords: ["DIMENS", "OIL", "WATER", "GAS", "DISGAS", "METRIC/FIELD"]
+      optional_keywords: ["TITLE", "START", "WELLDIMS", "TABDIMS"]
+
+    GRID:
+      description: "网格几何与属性"
+      keywords: ["DX", "DY", "DZ", "TOPS", "COORD", "ZCORN", "PORO", "PERMX", "PERMY", "PERMZ", "NTG"]
+
+    PROPS:
+      description: "流体和岩石属性"
+      keywords: ["PVTO", "PVTG", "PVTW", "DENSITY", "ROCK", "SWOF", "SGOF", "PVDO", "PVDG"]
+
+    SOLUTION:
+      description: "初始条件"
+      keywords: ["EQUIL", "DATUM", "PRESSURE", "SWAT", "SGAS", "RS", "PBUB"]
+
+    SCHEDULE:
+      description: "井定义和时间表"
+      keywords: ["WELSPECS", "COMPDAT", "WCONINJE", "WCONPROD", "DATES", "TSTEP", "END"]
+
+  # 解析格式
+  value_formats:
+    single_next_line:
+      description: "值在关键字下一行，以/结尾"
+      example: "DATUM\n  2560.3 /"
+
+    array_multiline:
+      description: "数组跨多行，最后以/结尾"
+      example: "PORO\n  0.25 0.30 0.28\n  0.22 0.25 0.27 /"
+
+    repeat_shorthand:
+      description: "N*value重复简写"
+      example: "PORO\n  300*0.3 /"
+      regex: r'(\d+)\*([0-9.eE+\-]+)'
+
+    table_slash_terminated:
+      description: "表格每行以/结尾，最后一个/结束整个表"
+      example: "SWOF\n  0.12 0.0 1.0 0.0 /\n  0.82 0.0 0.0 0.0 /"
+
+    inline_multiple:
+      description: "多个值在同一行（如DENSITY, ROCK）"
+      example: "DENSITY\n  740.5 1002.0 1.038 /"
+
+# -----------------------------------------------------------------------------
+# 通用JSON中间层格式（Parser输出 / Generator输入）
+# -----------------------------------------------------------------------------
+universal_json_schema:
+
+  meta:
+    description: "文件元信息"
+    fields:
+      source_software: "cmg_imex 或 petrel_eclipse"
+      source_file: "原始文件名"
+      unit_system: "field 或 metric"
+      conversion_timestamp: "ISO8601时间戳"
+
+  grid:
+    description: "网格定义参数"
+    fields: ["grid_type", "ni", "nj", "nk", "di", "dj", "dk", "depth_ref_block"]
+
+  reservoir:
+    description: "储层岩石参数"
+    fields: ["porosity", "perm_i", "perm_j", "perm_k", "rock_compressibility", "rock_ref_pressure"]
+
+  fluid:
+    description: "流体PVT参数"
+    fields: ["pvt_table", "oil_density", "gas_density", "water_density",
+             "water_fvf", "water_compressibility", "water_ref_pressure", "water_viscosity"]
+
+  rockfluid:
+    description: "相对渗透率表"
+    fields: ["swt_table", "slt_table"]
+
+  initial:
+    description: "初始条件"
+    fields: ["ref_depth", "ref_pressure", "bubble_point_pressure", "woc_depth", "goc_depth"]
+
+  numerical:
+    description: "数值控制"
+    fields: ["max_timestep", "max_steps"]
+
+  wells:
+    description: "井列表（数组）"
+    fields: ["well_name", "well_type", "well_bhp_max", "well_rate_max", "perf_location", "well_radius"]
+
+  # 每个参数值的标准结构
+  scalar_value_structure:
+    example:
+      type: scalar
+      value: 4800.0
+      unit: psia
+      confidence: 0.99
+      source: "INITIAL区块 *REFPRES 第42行"
+
+  array_value_structure:
+    example:
+      type: array
+      values: [0.25, 0.30, 0.28]
+      unit: fraction
+      grid_order: IJK
+      shape: [10, 10, 3]
+      confidence: 0.99
+      source: "RESERVOIR区块 *POR *CON 第28行"
+
+  table_value_structure:
+    example:
+      type: table
+      columns: [sw, krw, krow]
+      rows: [[0.12, 0.0, 1.0], [0.82, 0.0, 0.0]]
+      unit: fraction
+      confidence: 0.99
+      source: "ROCKFLUID区块 *SWT 第65行"

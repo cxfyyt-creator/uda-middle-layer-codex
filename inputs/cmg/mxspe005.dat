@@ -1,0 +1,357 @@
+   ******************************************************************************
+   ** mxspe005.dat:           WAG Model By Pseudo-miscible Formulation         **
+   ******************************************************************************
+   **************************************************************************************
+   **                                                                                  **
+   ** FILE:   MXSPE005.DAT                                                             **
+   **                                                                                  **
+   ** MODEL:  7x7x3                  SPE 5                   PSEUDO-MISCIBLE WAG MODEL **      
+   **                                                                                  **        
+   **************************************************************************************
+   **                                                                                  **
+   ** Based on the paper:Killough,J.E.,and Kossak,C.A.,"Fifth SPE Comparative Solution **
+   ** Project:Evaluation of Miscible Flood Simulators", 9th SPE Symposium on Reservoir **
+   ** Simulation,1987.  It models WAG process using pseudomiscible formulation.        ** 
+   **                                                                                  **  
+   **************************************************************************************
+   ** CONTACT:    CMG,   (403)531-1300;   282-6495 (fax);support@cmgl.ca    (Internet) **
+   **************************************************************************************                                
+
+RESULTS SIMULATOR IMEX
+
+   *************************************************************************
+   ** I/O Control section
+   *************************************************************************
+
+   *TITLE1        
+   'Fifth SPE Comparative Solution Project'
+   *TITLE2
+   'Pseudomiscible Study of WAG Process'
+   *TITLE3
+   'Killough,J.E., and Kossak,C.A., Ninth SPE Symposium,1987 (SPE 16000).'   
+
+   *INUNIT *FIELD                  
+   *WPRN   *ITER *BRIEF
+   *WPRN   *WELL *TIME
+   *WPRN   *GRID *TIME
+
+   *WSRF   *GRID 0
+   *WSRF   *WELL 1 
+                                                                    
+   *************************************************************************
+   ** Reservoir Description Section
+   *************************************************************************
+
+   *GRID *CART 7 7 3 
+   *DI *CON                        ** All I (x) direction blocks are constant
+     500.000                       ** in length.
+   *DJ *CON                        ** All J (y) direction blocks are constant
+     500.000                       ** in length.
+   *DK *KVAR                       ** K (z) direction blocks vary per layer
+     50.0  30.0  20.0   
+
+   *DEPTH 1 1 1 2000.              ** Depth to center of first block, in bottom layer.   
+
+   *POR *CON                       ** Porosity is constant throughout.
+     0.3000000
+
+   *PRPOR 4000.000                 ** Rock compressibility and
+   *CPOR   5.000E-6                ** reference pressure.     
+
+   ** Each of the I, J, and K permeabilities are constant within each layer
+   ** of the reservoir but vary from layer to layer. Hence the use of *KVAR
+   ** to input them layer by layer. Note that the first K layer is at
+   ** the  bottom of the reservoir.                                
+
+   *PERMI *KVAR
+     200.  50.  500.
+   *PERMJ *EQUALSI
+   *PERMK *KVAR
+      25.0  50.  50.
+
+   ** The transmissibility multipliers default to 1.
+                          
+
+   *MODEL *MISNCG                  ** Use the pseudomiscible option with
+                                   ** no chase gas.
+   *************************************************************************
+   ** Component Property section
+   *************************************************************************
+   *PVT                            ** PVT table for gas
+   **    p      rs        bo        eg     viso    visg
+       14.7     0.0     1.03480     4.730  0.310   0.0107
+      500.0   117.600   1.10170   168.800  0.295   0.0127
+     1000.0   222.600   1.14780   350.803  0.274   0.0134
+     1200.0   267.700   1.16770   426.603  0.264   0.0138
+     1500.0   341.400   1.19970   541.800  0.249   0.0145
+     1800.0   421.500   1.23500   657.808  0.234   0.0153
+     2000.0   479.000   1.26000   735.168  0.224   0.0159
+     2302.3   572.800   1.30100   850.991  0.208   0.0170
+     2500.0   634.100   1.32780   907.703  0.200   0.0177
+     3000.0   789.300   1.39560  1015.022  0.187   0.0195
+     3500.0   944.400   1.46340  1096.972  0.175   0.0214
+     4000.0  1099.500   1.53210  1159.958  0.167   0.0232
+     4500.0  1254.700   1.59910  1215.953  0.159   0.0250
+     4800.0  1347.800   1.63980  1245.020  0.155   0.0261   
+
+   *PVTS                           ** PVT table for solvent
+   **   p         rss     es      viss   omega_s
+       14.7       0.0     4.480  0.011   0.0
+      500.0       0.0   178.501  0.012   0.0
+     1000.0       0.0   395.100  0.013   0.0
+     1200.0       0.0   491.304  0.014   0.0
+     1500.0       0.0   641.313  0.016   0.0
+     1800.0       0.0   790.077  0.018   0.0
+     2000.0       0.0   885.269  0.019   0.0
+     2302.3       0.0  1020.096  0.022   0.0
+     2500.0       0.0  1100.715  0.023   0.21
+     3000.0       0.0  1280.902  0.027   0.74
+     3500.0       0.0  1429.797  0.031   0.74
+     4000.0       0.0  1555.210  0.034   0.74
+     4500.0       0.0  1661.958  0.037   0.74
+     4800.0       0.0  1719.100  0.038   0.74
+                                               
+   *DENSITY *OIL     38.53
+   *DENSITY *GAS      0.06864
+   *DENSITY *WATER   62.4
+   *DENSITY *SOLVENT  0.06248
+
+   *CO    2.1850E-5                ** Oil compressibility
+   *CVO   2.5500E-5                ** Pressure dependence on oil compressibility
+   *BWI   1.0                      ** Water formation volume factor
+   *CW    3.3000E-6                ** Water compressibility
+   *REFPW 14.7                     ** Reference pressure
+   *VWI   0.7000000                ** Water viscosity at reference pressure
+   *CVW   0.0                      ** Pressure dependence on water compressibility   
+
+   *OMEGASG 0.77                   ** Gas and solvent mixing parameter
+   *MINSS   0.2                    ** Minimum solvent saturation
+                                
+
+   *ROCKFLUID
+   *************************************************************************
+   ** Rock-Fluid Properties
+   *************************************************************************
+   *RPT
+   *SWT
+   ** sw        krw      krow      pcow     sorm
+    0.2000000   0.0      1.0000    45.00    0.0
+    0.2899000   0.0022   0.6769    19.03    0.0
+    0.3778000   0.0180   0.4153    10.07    0.0
+    0.4667000   0.0607   0.2178     4.90    0.0
+    0.5556000   0.1438   0.0835     1.80    0.0
+    0.6444002   0.2809   0.0123     0.50    0.0
+    0.7000000   0.4089   0.0        0.05    0.0
+    0.7333000   0.4855   0.0        0.01    0.0
+    0.8221999   0.7709   0.0        0.0     0.0
+    0.9111000   1.0000   0.0        0.0     0.0
+    1.00000     1.0000   0.0        0.0     0.0
+
+   *SLT
+   ** sl          krg      krog      pcow
+    0.2000000     1.00     0.0       30.000
+    0.2889000     0.56     0.0        8.000
+    0.3500000     0.39     0.0        4.000
+    0.3778000     0.35     0.0110     3.000
+    0.4667000     0.20     0.0370     0.800
+    0.5556000     0.10     0.0878     0.030
+    0.6444002     0.05     0.1715     0.001
+    0.7333000     0.03     0.2963     0.001
+    0.8221999     0.01     0.4705     0.0
+    0.9111000     0.001    0.7023     0.0
+    0.9500000     0.0      0.8800     0.0
+    1.00000       0.0      1.0000     0.0   
+
+
+   *INITIAL
+   *************************************************************************
+   ** Initial Conditions Section
+   *************************************************************************
+   *USER_INPUT                     ** This keyword replaces VERTICAL *OFF              
+   *PRES *KVAR                     ** Pressure is constant in each layer 
+     4000.0   3990.3   3984.3      ** but varies between the layers.
+   *PB   *CON                      ** Initial bubble point pressure is
+     2302.3                        ** constant throughout
+   *PBS  *CON                      ** Initial solvent bubble point pressure
+     2302.3                        ** is constant throughout.
+   *SW  *CON                       ** Water saturations are constant.
+     0.20
+   *SO  *CON                       ** Oil saturations are constant.
+     0.80
+                               
+
+   *NUMERICAL
+   *************************************************************************
+   ** Numerical Methods Control Section
+   *************************************************************************
+   *DTMAX 100.
+   *MAXSTEPS  999                  ** Maximum number of time steps
+   *NORM *PRESS  500.0             ** Normal maximum changes per time step
+   *AIM *THRESH  .25  .25   
+
+
+   *RUN
+   *************************************************************************
+   ** Well Data Section
+   *************************************************************************
+   *DATE  1986 12 1
+   *DTWELL 1.000   
+
+   ** Two injectors are defined for the same grid block, to model one
+   ** injection well in the problem. This is to allow easy switching
+   ** between water injection and solvent injection during the WAG
+   ** process without having to completely redefine the injector.
+   ** At least one of the injectors is shutin at all times.   
+
+   *WELL 1 'Water Injector'      ** Water Injector               
+   *WELL 2 'Producer'              
+   *WELL 3 'Solvent Injector'    ** Solvent Injector   
+
+   ** All wells have the same geometry.
+   **            rad   geofac  wfrac  skin
+   *GEOMETRY *K  0.25   0.34    1.0    0.0   
+
+   ** For the first two years both injectors are shut in;
+   ** only the producer is operational.   
+
+   *INJECTOR *MOBWEIGHT 1
+   *INCOMP  *WATER            
+   *OPERATE *MAX *STW   12000.0
+   *OPERATE *MAX *BHP   10000.0
+   *PERF *GEO 1      
+   ** if  jf  kf  ff 
+       1   1   3   1.0
+   *SHUTIN 1   
+
+   *PRODUCER 2
+   *OPERATE *MAX *STO 12000.0      ** Primary operating constraint.
+   *OPERATE *MIN *BHP  1000.0      ** Bottomhole pressure is also monitored.
+   *MONITOR *GOR    10000.0  *STOP ** Monitor GOR and stop simulation if hit.
+   *MONITOR *WCUT 0.8330002  *STOP ** Monitor Water Cut and stop simulation.
+   *PERF *GEO 2      
+   ** if  jf  kf  ff 
+       7   7   1   1.0    
+
+   *INJECTOR *MOBWEIGHT 3
+   *INCOMP   *SOLVENT
+   *OPERATE *MAX *STS   1.2E+7
+   *OPERATE *MAX *BHP   10000.0
+   *PERF *GEO 3      
+   ** if  jf  kf  ff 
+       1   1   3   1.0
+   *SHUTIN 3   
+
+   *AIMSET *CON 0
+   *AIMWELL *WELLN
+        
+   *TIME  365.000                  ** Forces time step to end at one year.   
+
+   *TIME  730.000                  ** Forces time step to end at two years.
+   *OPEN 1                         ** Open water injector, begin WAG process.
+   *AIMSET *CON 0                  ** Reset all blocks to explicit.
+   *AIMWELL *WELLN                 ** Set well blocks and neighbours implicit.   
+
+   *TIME 1095.0
+   *SHUTIN 1                       ** Shutin water injector.
+   *OPEN 3                         ** Open solvent injector.
+   *AIMSET *CON 0
+   *AIMWELL *WELLN
+
+   *TIME 1460.0
+   *SHUTIN 3
+   *OPEN 1
+   *AIMSET *CON 0
+   *AIMWELL *WELLN
+
+   *TIME 1825.0
+   *SHUTIN 1
+   *OPEN 3
+   *AIMSET *CON 0
+   *AIMWELL *WELLN
+   
+   *TIME 2190.0
+   *SHUTIN 3
+   *OPEN 1
+   *AIMSET *CON 0
+   *AIMWELL *WELLN
+
+   *TIME 2555.0
+   *SHUTIN 1
+   *OPEN 3
+   *AIMSET *CON 0
+   *AIMWELL *WELLN   
+
+   *TIME 2920.0
+   *SHUTIN 3
+   *OPEN 1
+   *AIMSET *CON 0
+   *AIMWELL *WELLN   
+
+   *TIME 3285.0
+   *SHUTIN 1
+   *OPEN 3
+   *AIMSET *CON 0
+   *AIMWELL *WELLN
+
+   *TIME 3650.0
+   *SHUTIN 3
+   *OPEN 1
+   *AIMSET *CON 0
+   *AIMWELL *WELLN
+          
+   *TIME 4015.0
+   *SHUTIN 1
+   *OPEN 3
+   *AIMSET *CON 0
+   *AIMWELL *WELLN   
+
+   *TIME 4380.0
+   *SHUTIN 3
+   *OPEN 1
+   *AIMSET *CON 0
+   *AIMWELL *WELLN
+
+   *TIME 4745.0
+   *SHUTIN 1
+   *OPEN 3
+   *AIMSET *CON 0
+   *AIMWELL *WELLN
+
+   *TIME 5110.0
+   *SHUTIN 3
+   *OPEN 1
+   *AIMSET *CON 0
+   *AIMWELL *WELLN
+             
+   *TIME 5475.0
+   *SHUTIN 1
+   *OPEN 3
+   *AIMSET *CON 0
+   *AIMWELL *WELLN
+   
+   *TIME 5840.0
+   *SHUTIN 3
+   *OPEN 1
+   *AIMSET *CON 0
+   *AIMWELL *WELLN
+
+   *TIME 6205.0
+   *SHUTIN 1
+   *OPEN 3
+   *AIMSET *CON 0
+   *AIMWELL *WELLN
+
+   *TIME 6570.0
+   *SHUTIN 3
+   *OPEN 1
+   *AIMSET *CON 0
+   *AIMWELL *WELLN
+          
+   *TIME 6935.0
+   *SHUTIN 1
+   *OPEN 3
+   *AIMSET *CON 0
+   *AIMWELL *WELLN
+
+   *TIME 7300.0
+   *STOP

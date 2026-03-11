@@ -1,0 +1,229 @@
+   ******************************************************************************
+   ** mxspe002.dat:                Three-Phase Coning Model                    **
+   ******************************************************************************
+   **************************************************************************************
+   **                                                                                  **
+   ** FILE:   MXSPE002.DAT                                                             **
+   **                                                                                  **
+   ** MODEL:  10x1x15                 SPE 2                   THREE-PHASE CONING MODEL **      
+   **                                                                                  **        
+   **************************************************************************************
+   **                                                                                  **
+   ** Second Comparative Solution Project:  Chappelear,J.E.,  and Nolen,J.S.,  "Second **
+   ** Comparative Solution Project: A Three Phase Coning Study",Sixth SPE Symposium on **
+   ** Reservoir Simulation,1982 (SPE 10489). This is a 3-phase,10x1x15, coning model.  **
+   **                                                                                  **  
+   **************************************************************************************
+   ** CONTACT:    CMG,   (403)531-1300;   282-6495 (fax);support@cmgl.ca    (Internet) **
+   **************************************************************************************                                
+
+RESULTS SIMULATOR IMEX
+
+   *TITLE1
+   'Second SPE Comparative Solution Project'
+   *TITLE2
+   'Three Phase Coning Study - Radial coordinates'
+   *TITLE3
+   'Chappelear and Nolen, Sixth SPE Symposium, Jan.31-Feb.3, 1982.'
+
+   *INUNIT    *FIELD               
+
+   *WPRN      *WELL 10
+   *WPRN      *GRID *TIME
+   *WPRN      *ITER *NONE
+
+   *OUTPRN    *GRID *SO *SG *SW *PRES *IMEXMAP
+
+   *WSRF      *GRID 0
+   *WSRF      *WELL 1
+
+          
+   **************************************************************************  
+   ** Reservoir description Section
+   **************************************************************************
+
+   *GRID *RADIAL    10    1   15   ** This is a cylindrical coordinate
+                                   ** problem, r x theta x z.
+
+   *DI *IVAR                       ** I (r) direction dimensions vary from block to block
+     1.75    2.32    5.01   10.84    23.39  
+    50.55  109.21  235.92  509.68  1101.08
+
+   *DJ *CON                        ** J (theta) direction dimensions are constant
+    360.000
+
+   *DK *KVAR                       ** K (z) direction dimensions vary from block to block
+    100.0  50.0  20.0  18.0  19.0  12.0  18.0
+    2*8.0  14.0  16.0  15.0  26.0  15.0  20.0 
+
+   *DEPTH 1    1   15  9010.0      ** Depth to center of first block, in topmost layer.
+
+   *POR  *KVAR                     ** Porosities vary per K (z) layer
+     0.157  0.116  0.12  0.105  0.12
+     0.13   0.14   0.08  2*0.17 
+     0.13   0.16   0.111 0.097  0.087
+
+   *PRPOR 3600.0                   ** Rock compressibility and 
+   *CPOR  4.0E-6                   ** reference pressure
+                          
+   ** Each of the I, J, and K permeabilities are constant within each layer
+   ** of the reservoir but vary from layer to layer. Hence the use of *KVAR
+   ** to input them layer by layer. Note that the first K layer is at
+   ** the  bottom of the reservoir.                                
+
+   *PERMI *KVAR                   
+     350.0  191.0  137.5  300.0  125.0
+     472.0  682.0   60.0  775.0   418.5
+      90.0  202.0  148.0   47.5    35.0
+   *PERMJ *KVAR
+     350.0  191.0  137.5  300.0  125.0
+     472.0  682.0   60.0  775.0   418.5
+      90.0  202.0  148.0   47.5    35.   
+   *PERMK *KVAR
+      35.0   19.1   13.75  30.0    12.5
+      47.2   68.2    6.0   77.5    41.8
+       9.0   20.2   14.8    4.75    3.5
+                               
+
+   **************************************************************************
+   ** Component Properties Section
+   **************************************************************************
+
+   *MODEL *BLACKOIL                ** Three phase - three equation   
+
+   *PVT 
+   **    p        rs       bo         eg      viso     visg
+      400.000   165.000   1.01200   169.490   1.17000 0.0130000
+      800.000   335.000   1.02550   338.980   1.14000 0.0135000
+     1200.000   500.000   1.03800   510.200   1.11000 0.0140000
+     1600.000   665.000   1.05100   680.270   1.08000 0.0145000
+     2000.000   828.000   1.06300   847.460   1.06000 0.0150000
+     2400.000   985.000   1.07500  1020.400   1.03000 0.0155000
+     2800.000  1130.000   1.08700  1190.500   1.00000 0.0160000
+     3200.000  1270.000   1.09850  1351.400 0.9800000 0.0165000
+     3600.000  1390.000   1.11000  1538.500 0.9500000 0.0170000
+     4000.000  1500.000   1.12000  1694.900 0.9400002 0.0175000
+     4400.000  1600.000   1.13000  1851.900 0.9200000 0.0180000
+     4800.000  1676.000   1.14000  2040.800 0.9100000 0.0185000
+     5200.000  1750.000   1.14800  2222.200 0.9000000 0.0190000
+     5600.000  1810.000   1.15500  2381.000 0.8900000 0.0195000   
+
+   *DENSITY *OIL    45.0
+   *DENSITY *GAS     0.0702
+   *DENSITY *WATER  63.02
+   *CO               1.0E-5        ** Oil compressibility
+   *CVO              0.0           ** Viscosity dependence on oil compressibility
+   *BWI              1.01420       ** Water formation volume factor
+   *CW               3.0E-6        ** Water compressibility
+   *REFPW            14.7          ** Reference pressure
+   *VWI              0.96          ** Water viscosity at reference pressure
+   *CVW              0.0           ** Pressure dependence on water compressibility   
+   
+
+   **************************************************************************
+   **Rock-fluid Property Section
+   **************************************************************************   
+
+   *ROCKFLUID
+   *RPT 
+
+   *SWT                            ** Water-oil relative permeability table.
+   **   sw    krw    krow    pcow
+      0.22    0.0    1.0     7.0
+      0.30    0.07   0.4     4.0
+      0.40    0.15   0.125   3.0
+      0.50    0.24   0.0649  2.5
+      0.60    0.33   0.0048  2.0
+      0.80    0.65   0.0     1.0
+      0.90    0.83   0.0     0.5
+      1.00    1.0    0.0     0.0   
+
+   *SLT                            ** Liquid-gas relative permeability table.
+   **   sl     krg    krog     pcog
+      0.22    1.0     0.0      3.9
+      0.30    0.8125  0.0      3.5
+      0.40    0.5     0.0      3.0
+      0.50    0.42    0.0      2.5
+      0.60    0.34    0.0      2.0
+      0.70    0.24    0.02     1.5
+      0.80    0.1     0.1      1.0
+      0.90    0.022   0.33     0.5
+      0.96    0.0     0.6      0.2
+      1.0     0.0     1.0      0.0
+                                
+
+   **************************************************************************
+   ** Initial Conditions Section
+   **************************************************************************
+
+   *INITIAL
+   *VERTICAL *BLOCK_CENTER *WATER_OIL_GAS  ** Turn vertical equilibrium option
+   *PB *CON  0.0                   ** Set bubble point pressure to 0.
+   *REFPRES  3600.0                ** Set reference pressure
+   *REFDEPTH 9035.0                ** at the reference depth.
+   *DWOC     9209.0                ** Set water-oil contact
+   *DGOC     9035.0                ** Set gas-oil contact   
+
+
+   **************************************************************************   
+   ** Numerical Control Section
+   **************************************************************************
+
+   *NUMERICAL
+   *DTMAX    365                   
+   *MAXSTEPS     100               ** Maximum number of time steps
+   *NORM *PRESS  250.              
+   *AIM *THRESH  .25 .25   
+
+
+   **************************************************************************
+   ** Well Data Section
+   **************************************************************************   
+
+   *RUN    
+   *DATE 1994 01 01
+   *DTWELL 
+    0.0250000
+
+   *WELL 1 'Producer' *VERT 1 1 
+
+   *PRODUCER 1
+
+   ** Primary operating constraint is oil rate
+   *OPERATE *MAX *STO 1000.00     
+
+   ** Subsequent operating constraint is bottomhole pressure.
+   *OPERATE *MIN *BHP 3000.00 *CONT *REPEAT    
+
+   **             rad   geofac  wfrac  skin
+   *GEOMETRY  *K  0.25   0.5     1.0    0.0 
+   *PERFV *GEO 1
+   ** kf      ff     
+     8:9      1.0   
+
+   *AIMWELL *WELLN   
+
+   *TIME 10.0                      ** Well change at this time.
+   *ALTER                          ** Change primary constraint value.
+      1
+      100.0   
+
+   *AIMWELL *WELLN   
+
+   *TIME 50.0
+   *ALTER
+     1
+     1000.0
+
+   *AIMWELL *WELLN   
+
+   *TIME 720.0
+   *ALTER
+      1
+      100.0
+
+   *AIMWELL *WELLN
+
+   *TIME 900.0                     ** Normal termination should occur at 
+                                   ** this time
+   *STOP

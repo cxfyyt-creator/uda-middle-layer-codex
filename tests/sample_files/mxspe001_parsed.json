@@ -1,0 +1,483 @@
+{
+  "meta": {
+    "source_software": "cmg_imex",
+    "source_file": "mxspe001.dat",
+    "unit_system": "field",
+    "conversion_timestamp": "2026-03-06T07:11:14.633722",
+    "start_date": "1986-04-22",
+    "dtwell": null
+  },
+  "grid": {
+    "grid_type": "CART",
+    "ni": 10,
+    "nj": 10,
+    "nk": 3,
+    "di": {
+      "type": "scalar",
+      "value": 1000.0,
+      "unit": "ft",
+      "confidence": 0.99,
+      "source": "grid di 第5行",
+      "modifier": "CON"
+    },
+    "dj": {
+      "type": "scalar",
+      "value": 1000.0,
+      "unit": "ft",
+      "confidence": 0.99,
+      "source": "grid dj 第6行",
+      "modifier": "CON"
+    },
+    "dk": {
+      "type": "array",
+      "values": [
+        50.0,
+        30.0,
+        20.0
+      ],
+      "unit": "ft",
+      "grid_order": "IJK",
+      "confidence": 0.99,
+      "source": "grid dk 第7行",
+      "modifier": "KVAR"
+    },
+    "depth_ref_block": {
+      "type": "scalar",
+      "value": 8400.0,
+      "unit": "ft",
+      "i": 1,
+      "j": 1,
+      "k": 1,
+      "confidence": 0.99,
+      "source": "grid depth"
+    }
+  },
+  "reservoir": {
+    "porosity": {
+      "type": "scalar",
+      "value": 0.3,
+      "unit": "fraction",
+      "confidence": 0.99,
+      "source": "reservoir porosity 第10行",
+      "modifier": "CON"
+    },
+    "rock_compressibility": {
+      "type": "scalar",
+      "value": 3e-06,
+      "unit": "1/psi",
+      "confidence": 0.99,
+      "source": "reservoir rock_compressibility 第11行"
+    },
+    "rock_ref_pressure": {
+      "type": "scalar",
+      "value": 14.7,
+      "unit": "psia",
+      "confidence": 0.99,
+      "source": "reservoir rock_ref_pressure 第12行"
+    },
+    "perm_i": {
+      "type": "array",
+      "values": [
+        200.0,
+        50.0,
+        500.0
+      ],
+      "unit": "md",
+      "grid_order": "IJK",
+      "confidence": 0.99,
+      "source": "reservoir perm_i 第13行",
+      "modifier": "KVAR"
+    },
+    "perm_j": {
+      "type": "array",
+      "values": [
+        200.0,
+        50.0,
+        500.0
+      ],
+      "unit": "md",
+      "grid_order": "IJK",
+      "confidence": 0.99,
+      "source": "reservoir perm_j 第15行",
+      "modifier": "KVAR"
+    },
+    "perm_k": {
+      "type": "array",
+      "values": [
+        20.0,
+        40.0,
+        60.0
+      ],
+      "unit": "md",
+      "grid_order": "IJK",
+      "confidence": 0.99,
+      "source": "reservoir perm_k 第17行",
+      "modifier": "KVAR"
+    }
+  },
+  "fluid": {
+    "pvt_table": {
+      "type": "table",
+      "columns": [
+        "p",
+        "rs",
+        "bo",
+        "eg",
+        "viso",
+        "visg"
+      ],
+      "rows": [
+        [
+          14.7,
+          1.0,
+          1.062,
+          6.0,
+          1.04,
+          0.008
+        ],
+        [
+          264.7,
+          90.5,
+          1.15,
+          82.7,
+          0.975,
+          0.0096
+        ],
+        [
+          514.7,
+          180.0,
+          1.207,
+          159.0,
+          0.91,
+          0.0112
+        ],
+        [
+          1014.7,
+          371.0,
+          1.295,
+          313.0,
+          0.83,
+          0.014
+        ],
+        [
+          2014.7,
+          636.0,
+          1.435,
+          620.0,
+          0.695,
+          0.0189
+        ],
+        [
+          2514.0,
+          775.0,
+          1.5,
+          773.0,
+          0.641,
+          0.0208
+        ],
+        [
+          3014.7,
+          930.0,
+          1.565,
+          926.0,
+          0.594,
+          0.0228
+        ],
+        [
+          4014.7,
+          1270.0,
+          1.695,
+          1233.0,
+          0.51,
+          0.0268
+        ],
+        [
+          5014.7,
+          1618.0,
+          1.827,
+          1541.0,
+          0.449,
+          0.0309
+        ],
+        [
+          9014.7,
+          2984.0,
+          2.357,
+          2591.0,
+          0.203,
+          0.047
+        ]
+      ],
+      "confidence": 0.99,
+      "source": "fluid *PVT"
+    },
+    "oil_density": {
+      "type": "scalar",
+      "value": 46.244,
+      "unit": "lb/ft3",
+      "confidence": 0.99,
+      "source": "fluid oil_density"
+    },
+    "gas_density": {
+      "type": "scalar",
+      "value": 0.0647,
+      "unit": "lb/ft3",
+      "confidence": 0.99,
+      "source": "fluid gas_density"
+    },
+    "water_density": {
+      "type": "scalar",
+      "value": 62.238,
+      "unit": "lb/ft3",
+      "confidence": 0.99,
+      "source": "fluid water_density"
+    },
+    "water_fvf": {
+      "type": "scalar",
+      "value": 1.041,
+      "unit": "RB/STB",
+      "confidence": 0.99,
+      "source": "fluid water_fvf 第35行"
+    },
+    "water_compressibility": {
+      "type": "scalar",
+      "value": 2.9886e-06,
+      "unit": "1/psi",
+      "confidence": 0.99,
+      "source": "fluid water_compressibility 第36行"
+    },
+    "water_ref_pressure": {
+      "type": "scalar",
+      "value": 14.7,
+      "unit": "psia",
+      "confidence": 0.99,
+      "source": "fluid water_ref_pressure 第37行"
+    },
+    "water_viscosity": {
+      "type": "scalar",
+      "value": 0.31,
+      "unit": "cp",
+      "confidence": 0.99,
+      "source": "fluid water_viscosity 第38行"
+    },
+    "water_viscosity_coeff": {
+      "type": "scalar",
+      "value": 0.0,
+      "unit": "1/psi",
+      "confidence": 0.99,
+      "source": "fluid water_viscosity_coeff 第39行"
+    }
+  },
+  "rockfluid": {
+    "swt_table": {
+      "type": "table",
+      "columns": [
+        "sw",
+        "krw",
+        "krow"
+      ],
+      "rows": [
+        [
+          0.12,
+          0.0,
+          1.0
+        ],
+        [
+          0.82,
+          0.0,
+          0.0
+        ]
+      ],
+      "confidence": 0.99,
+      "source": "rockfluid *SWT"
+    },
+    "slt_table": {
+      "type": "table",
+      "columns": [
+        "sl",
+        "krg",
+        "krog"
+      ],
+      "rows": [
+        [
+          0.12,
+          0.984,
+          0.0
+        ],
+        [
+          0.15,
+          0.98,
+          0.0
+        ],
+        [
+          0.3,
+          0.94,
+          0.0
+        ],
+        [
+          0.4,
+          0.87,
+          0.0001
+        ],
+        [
+          0.5,
+          0.72,
+          0.001
+        ],
+        [
+          0.55,
+          0.6,
+          0.01
+        ],
+        [
+          0.6,
+          0.41,
+          0.021
+        ],
+        [
+          0.7,
+          0.19,
+          0.09
+        ],
+        [
+          0.75,
+          0.125,
+          0.2
+        ],
+        [
+          0.8,
+          0.075,
+          0.35
+        ],
+        [
+          0.88,
+          0.025,
+          0.7
+        ],
+        [
+          0.95,
+          0.005,
+          0.98
+        ],
+        [
+          0.98,
+          0.0,
+          0.997
+        ],
+        [
+          0.999,
+          0.0,
+          1.0
+        ],
+        [
+          1.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "confidence": 0.99,
+      "source": "rockfluid *SLT"
+    }
+  },
+  "initial": {
+    "bubble_point_pressure": {
+      "type": "scalar",
+      "value": 4014.7,
+      "unit": "psia",
+      "confidence": 0.99,
+      "source": "initial bubble_point_pressure 第65行",
+      "modifier": "CON"
+    },
+    "ref_depth": {
+      "type": "scalar",
+      "value": 8400.0,
+      "unit": "ft",
+      "confidence": 0.99,
+      "source": "initial ref_depth 第66行"
+    },
+    "ref_pressure": {
+      "type": "scalar",
+      "value": 4800.0,
+      "unit": "psia",
+      "confidence": 0.99,
+      "source": "initial ref_pressure 第67行"
+    },
+    "woc_depth": {
+      "type": "scalar",
+      "value": 9500.0,
+      "unit": "ft",
+      "confidence": 0.99,
+      "source": "initial woc_depth 第68行"
+    },
+    "goc_depth": {
+      "type": "scalar",
+      "value": 7000.0,
+      "unit": "ft",
+      "confidence": 0.99,
+      "source": "initial goc_depth 第69行"
+    }
+  },
+  "numerical": {
+    "max_timestep": {
+      "type": "scalar",
+      "value": 1000.0,
+      "unit": "day",
+      "confidence": 0.99,
+      "source": "numerical max_timestep 第71行"
+    },
+    "max_steps": {
+      "type": "scalar",
+      "value": 100.0,
+      "unit": "–",
+      "confidence": 0.99,
+      "source": "numerical max_steps 第72行"
+    }
+  },
+  "wells": [
+    {
+      "well_name": "Injector",
+      "well_type": "INJECTOR",
+      "well_index": 1,
+      "bhp_max": 20000.0,
+      "bhp_min": null,
+      "rate_max": 100000000.0,
+      "rate_min": null,
+      "perforations": [
+        {
+          "i": 1,
+          "j": 1,
+          "k": 3,
+          "wi": 100000.0,
+          "perf_type": "PERF"
+        }
+      ],
+      "well_radius": null,
+      "alter_schedule": [],
+      "source": "WELL 第75行"
+    },
+    {
+      "well_name": "Producer",
+      "well_type": "PRODUCER",
+      "well_index": 2,
+      "bhp_max": null,
+      "bhp_min": 1000.0,
+      "rate_max": 20000.0,
+      "rate_min": null,
+      "perforations": [
+        {
+          "i": 10,
+          "j": 10,
+          "k": 1,
+          "wi": 1.0,
+          "perf_type": "PERF"
+        }
+      ],
+      "well_radius": 0.25,
+      "alter_schedule": [],
+      "source": "WELL 第82行",
+      "geofac": 0.34,
+      "wfrac": 1.0,
+      "skin": 0.0
+    }
+  ]
+}

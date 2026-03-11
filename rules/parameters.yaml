@@ -1,0 +1,760 @@
+# =============================================================================
+# parameters.yaml
+# CMG IMEX <-> Petrel Eclipse 参数映射规则
+# 基于 SPE1 (mxspe001.dat) 提取，Petrel部分待真实文件验证
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 一、网格与几何
+# -----------------------------------------------------------------------------
+
+grid_type:
+  standard_name: grid_type
+  chinese_name: 网格类型
+  data_type: string
+  physical_range: null
+  required: true
+  cmg:
+    keyword: "*GRID"
+    block: GRID
+    unit: null
+    format: inline_keyword   # e.g. *GRID *CART 10 10 3
+    example: "*GRID *CART 10 10 3"
+  petrel:
+    keyword: DIMENS
+    section: RUNSPEC
+    unit: null
+    format: inline_values    # e.g. DIMENS 10 10 3 /
+    example: "DIMENS\n  10 10 3 /"
+  notes: "CMG支持CART/RADIAL/CORNER，Petrel用DIMENS声明网格数，COORD/ZCORN表示角点"
+
+ni:
+  standard_name: ni
+  chinese_name: I方向网格数
+  data_type: integer
+  physical_range: [1, 99999]
+  required: true
+  cmg:
+    keyword: "*GRID *CART"
+    block: GRID
+    unit: null
+    format: inline_integer   # 第1个内联整数
+  petrel:
+    keyword: DIMENS
+    section: RUNSPEC
+    unit: null
+    format: inline_integer   # 第1个整数
+  notes: "CMG在*GRID行内联，Petrel在DIMENS关键字后"
+
+nj:
+  standard_name: nj
+  chinese_name: J方向网格数
+  data_type: integer
+  physical_range: [1, 99999]
+  required: true
+  cmg:
+    keyword: "*GRID *CART"
+    block: GRID
+    unit: null
+    format: inline_integer   # 第2个内联整数
+  petrel:
+    keyword: DIMENS
+    section: RUNSPEC
+    unit: null
+    format: inline_integer   # 第2个整数
+
+nk:
+  standard_name: nk
+  chinese_name: K方向网格数
+  data_type: integer
+  physical_range: [1, 99999]
+  required: true
+  cmg:
+    keyword: "*GRID *CART"
+    block: GRID
+    unit: null
+    format: inline_integer   # 第3个内联整数
+  petrel:
+    keyword: DIMENS
+    section: RUNSPEC
+    unit: null
+    format: inline_integer   # 第3个整数
+
+di:
+  standard_name: di
+  chinese_name: I方向网格块尺寸
+  data_type: float_array
+  physical_range: [0.001, 999999.0]
+  required: true
+  cmg:
+    keyword: "*DI"
+    block: GRID
+    unit: ft                 # FIELD单位
+    format: CON_or_IVAR      # *CON 单值 或 *IVAR 逐块
+    example: "*DI *CON 1000.0"
+  petrel:
+    keyword: DX
+    section: GRID
+    unit: m                  # METRIC单位
+    format: array_slash      # 数值数组以/结尾
+    example: "DX\n  300*304.8 /"
+  unit_conversion: ft_to_m
+
+dj:
+  standard_name: dj
+  chinese_name: J方向网格块尺寸
+  data_type: float_array
+  physical_range: [0.001, 999999.0]
+  required: true
+  cmg:
+    keyword: "*DJ"
+    block: GRID
+    unit: ft
+    format: CON_or_JVAR
+    example: "*DJ *CON 1000.0"
+  petrel:
+    keyword: DY
+    section: GRID
+    unit: m
+    format: array_slash
+  unit_conversion: ft_to_m
+
+dk:
+  standard_name: dk
+  chinese_name: K方向网格块厚度
+  data_type: float_array
+  physical_range: [0.001, 99999.0]
+  required: true
+  cmg:
+    keyword: "*DK"
+    block: GRID
+    unit: ft
+    format: CON_or_KVAR      # *KVAR 按层给值（最常见）
+    example: "*DK *KVAR\n  50.0 30.0 20.0"
+  petrel:
+    keyword: DZ
+    section: GRID
+    unit: m
+    format: array_slash
+  unit_conversion: ft_to_m
+
+depth_ref_block:
+  standard_name: depth_ref_block
+  chinese_name: 参考块顶深度
+  data_type: float
+  physical_range: [0.0, 30000.0]
+  required: false
+  cmg:
+    keyword: "*DEPTH"
+    block: GRID
+    unit: ft
+    format: "i j k value"   # *DEPTH 1 1 1 8400.0
+    example: "*DEPTH 1 1 1 8400.0"
+  petrel:
+    keyword: TOPS
+    section: GRID
+    unit: m
+    format: array_slash
+  unit_conversion: ft_to_m
+
+# -----------------------------------------------------------------------------
+# 二、储层岩石属性
+# -----------------------------------------------------------------------------
+
+porosity:
+  standard_name: porosity
+  chinese_name: 孔隙度
+  data_type: float_array
+  physical_range: [0.01, 0.40]
+  required: true
+  cmg:
+    keyword: "*POR"
+    block: RESERVOIR
+    unit: fraction
+    format: CON_or_ALL_or_IJK
+    example: "*POR *CON 0.3"
+  petrel:
+    keyword: PORO
+    section: GRID
+    unit: fraction
+    format: array_slash
+    example: "PORO\n  300*0.3 /"
+  unit_conversion: null
+  notes: "两者单位相同(无量纲分数)，无需换算"
+
+perm_i:
+  standard_name: perm_i
+  chinese_name: I方向渗透率
+  data_type: float_array
+  physical_range: [0.001, 100000.0]
+  required: true
+  cmg:
+    keyword: "*PERMI"
+    block: RESERVOIR
+    unit: md
+    format: CON_or_KVAR
+    example: "*PERMI *KVAR\n  200.0 50.0 500.0"
+  petrel:
+    keyword: PERMX
+    section: GRID
+    unit: md
+    format: array_slash
+    example: "PERMX\n  100*200 100*50 100*500 /"
+  unit_conversion: null
+  notes: "两者均使用md，无需换算"
+
+perm_j:
+  standard_name: perm_j
+  chinese_name: J方向渗透率
+  data_type: float_array
+  physical_range: [0.001, 100000.0]
+  required: true
+  cmg:
+    keyword: "*PERMJ"
+    block: RESERVOIR
+    unit: md
+    format: CON_or_KVAR
+  petrel:
+    keyword: PERMY
+    section: GRID
+    unit: md
+    format: array_slash
+  unit_conversion: null
+
+perm_k:
+  standard_name: perm_k
+  chinese_name: K方向渗透率
+  data_type: float_array
+  physical_range: [0.001, 100000.0]
+  required: false
+  cmg:
+    keyword: "*PERMK"
+    block: RESERVOIR
+    unit: md
+    format: CON_or_KVAR
+    example: "*PERMK *KVAR\n  20.0 40.0 60.0"
+  petrel:
+    keyword: PERMZ
+    section: GRID
+    unit: md
+    format: array_slash
+  unit_conversion: null
+
+rock_compressibility:
+  standard_name: rock_compressibility
+  chinese_name: 岩石压缩系数
+  data_type: float
+  physical_range: [1.0e-8, 1.0e-3]
+  required: false
+  cmg:
+    keyword: "*CPOR"
+    block: RESERVOIR
+    unit: "1/psi"
+    format: single_value
+    example: "*CPOR 3.0E-6"
+  petrel:
+    keyword: ROCK
+    section: PROPS
+    unit: "1/bara"
+    format: "pref cf"        # ROCK pref cf (两个值在同一行)
+    example: "ROCK\n  14.7 4.35E-5 /"
+  unit_conversion: per_psi_to_per_bara
+  notes: "Petrel ROCK关键字同时包含参考压力和压缩系数"
+
+rock_ref_pressure:
+  standard_name: rock_ref_pressure
+  chinese_name: 岩石参考压力
+  data_type: float
+  physical_range: [0.0, 20000.0]
+  required: false
+  cmg:
+    keyword: "*PRPOR"
+    block: RESERVOIR
+    unit: psia
+    format: single_value
+    example: "*PRPOR 14.7"
+  petrel:
+    keyword: ROCK
+    section: PROPS
+    unit: bara
+    format: "inline_with_cpor"  # 与CPOR合并在ROCK关键字中
+  unit_conversion: psi_to_bara
+  notes: "CMG独立关键字，Petrel与rock_compressibility合并"
+
+# -----------------------------------------------------------------------------
+# 三、流体PVT属性
+# -----------------------------------------------------------------------------
+
+pvt_table:
+  standard_name: pvt_table
+  chinese_name: 黑油PVT表
+  data_type: table
+  physical_range: null
+  required: true
+  cmg:
+    keyword: "*PVT"
+    block: FLUID
+    unit: field              # p:psia, rs:scf/STB, bo:RB/STB, eg:Mscf/RB, viso:cp, visg:cp
+    format: multi_column_table
+    columns: [p, rs, bo, eg, viso, visg]
+    example: "*PVT\n** p   rs   bo   eg   viso  visg\n  14.7 1.0 1.062 6.0 1.04 0.008"
+  petrel:
+    keyword: PVTO            # 活油表（溶解气）
+    section: PROPS
+    unit: metric             # p:bara, rs:m³/m³, bo:m³/m³, viso:cp
+    format: multi_column_table_slash
+    columns: [rs, p, bo, viso]
+    example: "PVTO\n-- rs   p    bo   viso\n  0.178 1.013 1.062 1.04 /"
+  unit_conversion: pvt_field_to_metric
+  notes: "CMG单表含油气，Petrel分PVTO/PVTG/PVTW三张表，转换逻辑复杂"
+
+oil_density:
+  standard_name: oil_density
+  chinese_name: 地面油密度
+  data_type: float
+  physical_range: [30.0, 70.0]
+  required: true
+  cmg:
+    keyword: "*DENSITY *OIL"
+    block: FLUID
+    unit: "lb/ft3"
+    format: single_value
+    example: "*DENSITY *OIL 46.244"
+  petrel:
+    keyword: DENSITY
+    section: PROPS
+    unit: "kg/m3"
+    format: "oil_water_gas_inline"
+    example: "DENSITY\n  740.5 1002.0 1.038 /"
+  unit_conversion: lbft3_to_kgm3
+
+gas_density:
+  standard_name: gas_density
+  chinese_name: 地面气密度
+  data_type: float
+  physical_range: [0.01, 0.20]
+  required: true
+  cmg:
+    keyword: "*DENSITY *GAS"
+    block: FLUID
+    unit: "lb/ft3"
+    format: single_value
+    example: "*DENSITY *GAS 0.0647"
+  petrel:
+    keyword: DENSITY
+    section: PROPS
+    unit: "kg/m3"
+    format: "inline_with_oil_water"
+  unit_conversion: lbft3_to_kgm3
+
+water_density:
+  standard_name: water_density
+  chinese_name: 地面水密度
+  data_type: float
+  physical_range: [60.0, 70.0]
+  required: true
+  cmg:
+    keyword: "*DENSITY *WATER"
+    block: FLUID
+    unit: "lb/ft3"
+    format: single_value
+    example: "*DENSITY *WATER 62.238"
+  petrel:
+    keyword: DENSITY
+    section: PROPS
+    unit: "kg/m3"
+    format: "inline_with_oil_gas"
+  unit_conversion: lbft3_to_kgm3
+  notes: "CMG三行独立写，Petrel DENSITY一行写三个值(oil water gas)"
+
+water_fvf:
+  standard_name: water_fvf
+  chinese_name: 水地层体积系数
+  data_type: float
+  physical_range: [0.95, 1.10]
+  required: true
+  cmg:
+    keyword: "*BWI"
+    block: FLUID
+    unit: "RB/STB"
+    format: single_value
+    example: "*BWI 1.0410"
+  petrel:
+    keyword: PVTW
+    section: PROPS
+    unit: "m3/m3"
+    format: "pref bw cw vw cvw"
+    example: "PVTW\n  1.013 1.041 4.34E-5 0.31 0.0 /"
+  unit_conversion: null
+  notes: "数值相同无量纲。Petrel PVTW一行包含5个水PVT参数"
+
+water_compressibility:
+  standard_name: water_compressibility
+  chinese_name: 水压缩系数
+  data_type: float
+  physical_range: [1.0e-7, 5.0e-6]
+  required: true
+  cmg:
+    keyword: "*CW"
+    block: FLUID
+    unit: "1/psi"
+    format: single_value
+    example: "*CW 2.9886E-6"
+  petrel:
+    keyword: PVTW
+    section: PROPS
+    unit: "1/bara"
+    format: "inline_with_bw"
+  unit_conversion: per_psi_to_per_bara
+
+water_ref_pressure:
+  standard_name: water_ref_pressure
+  chinese_name: 水参考压力
+  data_type: float
+  physical_range: [0.0, 20000.0]
+  required: false
+  cmg:
+    keyword: "*REFPW"
+    block: FLUID
+    unit: psia
+    format: single_value
+    example: "*REFPW 14.7"
+  petrel:
+    keyword: PVTW
+    section: PROPS
+    unit: bara
+    format: "inline_first_value"
+  unit_conversion: psi_to_bara
+
+water_viscosity:
+  standard_name: water_viscosity
+  chinese_name: 水粘度
+  data_type: float
+  physical_range: [0.1, 3.0]
+  required: true
+  cmg:
+    keyword: "*VWI"
+    block: FLUID
+    unit: cp
+    format: single_value
+    example: "*VWI 0.31"
+  petrel:
+    keyword: PVTW
+    section: PROPS
+    unit: cp
+    format: "inline_with_pvtw"
+  unit_conversion: null
+
+# -----------------------------------------------------------------------------
+# 四、相对渗透率
+# -----------------------------------------------------------------------------
+
+swt_table:
+  standard_name: swt_table
+  chinese_name: 水-油相对渗透率表
+  data_type: table
+  physical_range: null
+  required: true
+  cmg:
+    keyword: "*SWT"
+    block: ROCKFLUID
+    unit: fraction
+    format: multi_column_table
+    columns: [sw, krw, krow]
+    example: "*SWT\n** sw  krw  krow\n  0.12 0.0  1.0\n  0.82 0.0  0.0"
+  petrel:
+    keyword: SWOF
+    section: PROPS
+    unit: fraction
+    format: multi_column_table_slash
+    columns: [sw, krw, krow, pcow]
+    example: "SWOF\n-- sw  krw   krow  pcow\n  0.12 0.0  1.0   0.0\n  0.82 0.0  0.0   0.0 /"
+  unit_conversion: null
+  notes: "Petrel SWOF比CMG *SWT多一列毛管压力Pcow，转换时默认补0"
+
+slt_table:
+  standard_name: slt_table
+  chinese_name: 液-气相对渗透率表
+  data_type: table
+  physical_range: null
+  required: true
+  cmg:
+    keyword: "*SLT"
+    block: ROCKFLUID
+    unit: fraction
+    format: multi_column_table
+    columns: [sl, krg, krog]
+    example: "*SLT\n** sl   krg   krog\n  0.12 0.984  0.0\n  1.0  0.0    1.0"
+  petrel:
+    keyword: SGOF
+    section: PROPS
+    unit: fraction
+    format: multi_column_table_slash
+    columns: [sg, krg, krog, pcog]
+    example: "SGOF\n-- sg   krg   krog  pcog\n  0.0  0.984  0.0   0.0\n  0.88 0.0    1.0   0.0 /"
+  unit_conversion: null
+  notes: "CMG用液相饱和度Sl，Petrel用气相饱和度Sg=1-Sl，转换时需要反转。Petrel多一列Pcog默认补0"
+
+# -----------------------------------------------------------------------------
+# 五、初始条件
+# -----------------------------------------------------------------------------
+
+ref_depth:
+  standard_name: ref_depth
+  chinese_name: 流体接触参考深度
+  data_type: float
+  physical_range: [0.0, 30000.0]
+  required: true
+  cmg:
+    keyword: "*REFDEPTH"
+    block: INITIAL
+    unit: ft
+    format: single_value
+    example: "*REFDEPTH 8400."
+  petrel:
+    keyword: DATUM
+    section: SOLUTION
+    unit: m
+    format: single_value
+    example: "DATUM\n  2560.3 /"
+  unit_conversion: ft_to_m
+
+ref_pressure:
+  standard_name: ref_pressure
+  chinese_name: 参考深度处压力
+  data_type: float
+  physical_range: [100.0, 20000.0]
+  required: true
+  cmg:
+    keyword: "*REFPRES"
+    block: INITIAL
+    unit: psia
+    format: single_value
+    example: "*REFPRES 4800."
+  petrel:
+    keyword: PRESSURE
+    section: SOLUTION
+    unit: bara
+    format: array_or_equil
+    example: "EQUIL\n  2560.3 330.9 2743.7 0 2438.4 0 /"
+  unit_conversion: psi_to_bara
+  notes: "Petrel常用EQUIL关键字做垂向平衡初始化，包含多个深度-压力信息"
+
+bubble_point_pressure:
+  standard_name: bubble_point_pressure
+  chinese_name: 初始泡点压力
+  data_type: float_array
+  physical_range: [100.0, 20000.0]
+  required: false
+  cmg:
+    keyword: "*PB"
+    block: INITIAL
+    unit: psia
+    format: CON_or_array
+    example: "*PB *CON 4014.7"
+  petrel:
+    keyword: PBUB
+    section: SOLUTION
+    unit: bara
+    format: array_slash
+    example: "PBUB\n  300*276.8 /"
+  unit_conversion: psi_to_bara
+
+woc_depth:
+  standard_name: woc_depth
+  chinese_name: 油水界面深度
+  data_type: float
+  physical_range: [0.0, 30000.0]
+  required: false
+  cmg:
+    keyword: "*DWOC"
+    block: INITIAL
+    unit: ft
+    format: single_value
+    example: "*DWOC 9500."
+  petrel:
+    keyword: EQUIL
+    section: SOLUTION
+    unit: m
+    format: "inline_col3"    # EQUIL第3列
+  unit_conversion: ft_to_m
+
+goc_depth:
+  standard_name: goc_depth
+  chinese_name: 气油界面深度
+  data_type: float
+  physical_range: [0.0, 30000.0]
+  required: false
+  cmg:
+    keyword: "*DGOC"
+    block: INITIAL
+    unit: ft
+    format: single_value
+    example: "*DGOC 7000."
+  petrel:
+    keyword: EQUIL
+    section: SOLUTION
+    unit: m
+    format: "inline_col5"    # EQUIL第5列
+  unit_conversion: ft_to_m
+
+# -----------------------------------------------------------------------------
+# 六、数值控制
+# -----------------------------------------------------------------------------
+
+max_timestep:
+  standard_name: max_timestep
+  chinese_name: 最大时间步长
+  data_type: float
+  physical_range: [0.001, 9999.0]
+  required: false
+  cmg:
+    keyword: "*DTMAX"
+    block: NUMERICAL
+    unit: day
+    format: single_value
+    example: "*DTMAX 1000."
+  petrel:
+    keyword: TSMAXZ
+    section: TUNING
+    unit: day
+    format: single_value
+  unit_conversion: null
+
+max_steps:
+  standard_name: max_steps
+  chinese_name: 最大时间步数
+  data_type: integer
+  physical_range: [1, 999999]
+  required: false
+  cmg:
+    keyword: "*MAXSTEPS"
+    block: NUMERICAL
+    unit: null
+    format: single_value
+    example: "*MAXSTEPS 100"
+  petrel:
+    keyword: null
+    section: null
+    unit: null
+    format: null
+  unit_conversion: null
+  notes: "Petrel无直接对应关键字，可忽略"
+
+# -----------------------------------------------------------------------------
+# 七、井定义
+# -----------------------------------------------------------------------------
+
+well_name:
+  standard_name: well_name
+  chinese_name: 井名
+  data_type: string
+  physical_range: null
+  required: true
+  cmg:
+    keyword: "*WELL"
+    block: WELL
+    unit: null
+    format: "index 'name'"   # *WELL 1 'Injector'
+    example: "*WELL 1 'Injector'"
+  petrel:
+    keyword: WELSPECS
+    section: SCHEDULE
+    unit: null
+    format: "name group i j depth phase"
+    example: "WELSPECS\n  'Injector' 'G1' 1 1 1* GAS /"
+
+well_type:
+  standard_name: well_type
+  chinese_name: 井类型
+  data_type: string
+  physical_range: null
+  required: true
+  cmg:
+    keyword: "*INJECTOR or *PRODUCER"
+    block: WELL
+    unit: null
+    format: keyword
+    example: "*INJECTOR *UNWEIGHT 1"
+  petrel:
+    keyword: "WCONINJE or WCONPROD"
+    section: SCHEDULE
+    unit: null
+    format: keyword
+    example: "WCONINJE\n  'Injector' GAS OPEN RATE 1E8 / /"
+
+well_bhp_max:
+  standard_name: well_bhp_max
+  chinese_name: 井底最大压力约束
+  data_type: float
+  physical_range: [100.0, 30000.0]
+  required: false
+  cmg:
+    keyword: "*OPERATE *MAX *BHP"
+    block: WELL
+    unit: psia
+    format: single_value
+    example: "*OPERATE *MAX *BHP 20000.0"
+  petrel:
+    keyword: "WCONINJE/WCONPROD"
+    section: SCHEDULE
+    unit: bara
+    format: "inline_bhp_column"
+  unit_conversion: psi_to_bara
+
+well_rate_max:
+  standard_name: well_rate_max
+  chinese_name: 最大生产/注入速率
+  data_type: float
+  physical_range: [0.0, 1.0e9]
+  required: false
+  cmg:
+    keyword: "*OPERATE *MAX *STG or *STO"
+    block: WELL
+    unit: "Mscf/d or STB/d"
+    format: single_value
+    example: "*OPERATE *MAX *STG 1.0E+8"
+  petrel:
+    keyword: "WCONINJE/WCONPROD"
+    section: SCHEDULE
+    unit: "m3/d"
+    format: "inline_rate_column"
+  unit_conversion: stb_to_m3_or_mscf_to_m3
+
+perf_location:
+  standard_name: perf_location
+  chinese_name: 射孔位置
+  data_type: integer_array
+  physical_range: null
+  required: true
+  cmg:
+    keyword: "*PERF"
+    block: WELL
+    unit: null
+    format: "i j k wi"      # 每行一个射孔
+    example: "*PERF 1\n  1 1 3 1.0E+5"
+  petrel:
+    keyword: COMPDAT
+    section: SCHEDULE
+    unit: null
+    format: "name i j k1 k2 status satnum transmult diam kh skin dfact dir"
+    example: "COMPDAT\n  'Injector' 1 1 3 3 OPEN 1* 1* 0.1524 / /"
+
+well_radius:
+  standard_name: well_radius
+  chinese_name: 井筒半径
+  data_type: float
+  physical_range: [0.01, 2.0]
+  required: false
+  cmg:
+    keyword: "*GEOMETRY"
+    block: WELL
+    unit: ft
+    format: "type rad geofac wfrac skin"
+    example: "*GEOMETRY *K 0.25 0.34 1.0 0.0"
+  petrel:
+    keyword: COMPDAT
+    section: SCHEDULE
+    unit: m
+    format: "inline_col8"    # COMPDAT第8列
+  unit_conversion: ft_to_m

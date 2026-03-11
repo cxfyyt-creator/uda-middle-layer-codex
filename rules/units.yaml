@@ -1,0 +1,253 @@
+# =============================================================================
+# units.yaml
+# 单位换算规则
+# CMG IMEX (FIELD单位) <-> Petrel Eclipse (METRIC单位)
+# =============================================================================
+# 换算方向：CMG FIELD → Petrel METRIC（生成Petrel文件时使用）
+# 反向换算：factor取倒数，温度除外（非线性）
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 压力
+# -----------------------------------------------------------------------------
+psi_to_bara:
+  physical_quantity: pressure
+  from_unit: psia
+  to_unit: bara
+  factor: 0.0689476
+  formula: "value_bara = value_psia * 0.0689476"
+  inverse: bara_to_psi
+  notes: "1 psi = 0.0689476 bar (绝压)"
+
+bara_to_psi:
+  physical_quantity: pressure
+  from_unit: bara
+  to_unit: psia
+  factor: 14.5038
+  formula: "value_psia = value_bara * 14.5038"
+  inverse: psi_to_bara
+
+psi_to_mpa:
+  physical_quantity: pressure
+  from_unit: psia
+  to_unit: MPa
+  factor: 0.00689476
+  formula: "value_mpa = value_psia * 0.00689476"
+  inverse: mpa_to_psi
+
+mpa_to_psi:
+  physical_quantity: pressure
+  from_unit: MPa
+  to_unit: psia
+  factor: 145.038
+  formula: "value_psia = value_mpa * 145.038"
+  inverse: psi_to_mpa
+
+# -----------------------------------------------------------------------------
+# 压缩系数（1/压力）
+# -----------------------------------------------------------------------------
+per_psi_to_per_bara:
+  physical_quantity: compressibility
+  from_unit: "1/psi"
+  to_unit: "1/bara"
+  factor: 14.5038
+  formula: "value_per_bara = value_per_psi * 14.5038"
+  inverse: per_bara_to_per_psi
+  notes: "压缩系数换算与压力相反，乘以压力换算系数的倒数的倒数=乘以14.5038"
+
+per_bara_to_per_psi:
+  physical_quantity: compressibility
+  from_unit: "1/bara"
+  to_unit: "1/psi"
+  factor: 0.0689476
+  formula: "value_per_psi = value_per_bara * 0.0689476"
+  inverse: per_psi_to_per_bara
+
+# -----------------------------------------------------------------------------
+# 长度 / 深度
+# -----------------------------------------------------------------------------
+ft_to_m:
+  physical_quantity: length
+  from_unit: ft
+  to_unit: m
+  factor: 0.3048
+  formula: "value_m = value_ft * 0.3048"
+  inverse: m_to_ft
+
+m_to_ft:
+  physical_quantity: length
+  from_unit: m
+  to_unit: ft
+  factor: 3.28084
+  formula: "value_ft = value_m * 3.28084"
+  inverse: ft_to_m
+
+# -----------------------------------------------------------------------------
+# 渗透率
+# -----------------------------------------------------------------------------
+md_to_md:
+  physical_quantity: permeability
+  from_unit: md
+  to_unit: md
+  factor: 1.0
+  formula: "value_md = value_md * 1.0"
+  notes: "CMG和Petrel均使用md，无需换算"
+
+# -----------------------------------------------------------------------------
+# 密度（地面条件）
+# -----------------------------------------------------------------------------
+lbft3_to_kgm3:
+  physical_quantity: density
+  from_unit: "lb/ft3"
+  to_unit: "kg/m3"
+  factor: 16.0185
+  formula: "value_kgm3 = value_lbft3 * 16.0185"
+  inverse: kgm3_to_lbft3
+
+kgm3_to_lbft3:
+  physical_quantity: density
+  from_unit: "kg/m3"
+  to_unit: "lb/ft3"
+  factor: 0.062428
+  formula: "value_lbft3 = value_kgm3 * 0.062428"
+  inverse: lbft3_to_kgm3
+
+# -----------------------------------------------------------------------------
+# 体积系数（无量纲）
+# -----------------------------------------------------------------------------
+rbstb_to_m3m3:
+  physical_quantity: formation_volume_factor
+  from_unit: "RB/STB"
+  to_unit: "m3/m3"
+  factor: 1.0
+  formula: "value_m3m3 = value_rbstb * 1.0"
+  notes: "体积比，数值相同无需换算"
+
+# -----------------------------------------------------------------------------
+# 粘度
+# -----------------------------------------------------------------------------
+cp_to_cp:
+  physical_quantity: viscosity
+  from_unit: cp
+  to_unit: cp
+  factor: 1.0
+  formula: "value_cp = value_cp * 1.0"
+  notes: "两软件均使用cp，无需换算"
+
+# -----------------------------------------------------------------------------
+# 温度（非线性换算）
+# -----------------------------------------------------------------------------
+fahrenheit_to_celsius:
+  physical_quantity: temperature
+  from_unit: degF
+  to_unit: degC
+  factor: null              # 非线性，不使用factor
+  formula: "value_C = (value_F - 32.0) / 1.8"
+  inverse: celsius_to_fahrenheit
+  notes: "非线性换算，不能直接乘系数"
+
+celsius_to_fahrenheit:
+  physical_quantity: temperature
+  from_unit: degC
+  to_unit: degF
+  factor: null
+  formula: "value_F = value_C * 1.8 + 32.0"
+  inverse: fahrenheit_to_celsius
+
+# -----------------------------------------------------------------------------
+# 气体体积（地面标况）
+# -----------------------------------------------------------------------------
+mscf_to_m3:
+  physical_quantity: gas_volume
+  from_unit: Mscf
+  to_unit: m3
+  factor: 28.3168
+  formula: "value_m3 = value_mscf * 28.3168"
+  inverse: m3_to_mscf
+  notes: "标准立方英尺换算，1 scf = 0.028317 m³"
+
+m3_to_mscf:
+  physical_quantity: gas_volume
+  from_unit: m3
+  to_unit: Mscf
+  factor: 0.035315
+  formula: "value_mscf = value_m3 * 0.035315"
+  inverse: mscf_to_m3
+
+# -----------------------------------------------------------------------------
+# 液体体积（地面标况）
+# -----------------------------------------------------------------------------
+stb_to_m3:
+  physical_quantity: liquid_volume
+  from_unit: STB
+  to_unit: m3
+  factor: 0.158987
+  formula: "value_m3 = value_stb * 0.158987"
+  inverse: m3_to_stb
+  notes: "1 barrel = 0.158987 m³"
+
+m3_to_stb:
+  physical_quantity: liquid_volume
+  from_unit: m3
+  to_unit: STB
+  factor: 6.28981
+  formula: "value_stb = value_m3 * 6.28981"
+  inverse: stb_to_m3
+
+# -----------------------------------------------------------------------------
+# 溶解气油比
+# -----------------------------------------------------------------------------
+scf_per_stb_to_m3m3:
+  physical_quantity: solution_gor
+  from_unit: "scf/STB"
+  to_unit: "m3/m3"
+  factor: 0.178107
+  formula: "value_m3m3 = value_scf_per_stb * 0.178107"
+  inverse: m3m3_to_scf_per_stb
+  notes: "1 scf/STB = 0.178107 m³/m³"
+
+m3m3_to_scf_per_stb:
+  physical_quantity: solution_gor
+  from_unit: "m3/m3"
+  to_unit: "scf/STB"
+  factor: 5.61458
+  formula: "value_scf_per_stb = value_m3m3 * 5.61458"
+  inverse: scf_per_stb_to_m3m3
+
+# -----------------------------------------------------------------------------
+# 产气量 / 注气量（速率）
+# -----------------------------------------------------------------------------
+mscfd_to_m3d:
+  physical_quantity: gas_rate
+  from_unit: "Mscf/d"
+  to_unit: "m3/d"
+  factor: 28.3168
+  formula: "value_m3d = value_mscfd * 28.3168"
+  inverse: m3d_to_mscfd
+
+m3d_to_mscfd:
+  physical_quantity: gas_rate
+  from_unit: "m3/d"
+  to_unit: "Mscf/d"
+  factor: 0.035315
+  formula: "value_mscfd = value_m3d * 0.035315"
+  inverse: mscfd_to_m3d
+
+# -----------------------------------------------------------------------------
+# 产油量 / 注液量（速率）
+# -----------------------------------------------------------------------------
+stbd_to_m3d:
+  physical_quantity: liquid_rate
+  from_unit: "STB/d"
+  to_unit: "m3/d"
+  factor: 0.158987
+  formula: "value_m3d = value_stbd * 0.158987"
+  inverse: m3d_to_stbd
+
+m3d_to_stbd:
+  physical_quantity: liquid_rate
+  from_unit: "m3/d"
+  to_unit: "STB/d"
+  factor: 6.28981
+  formula: "value_stbd = value_m3d * 6.28981"
+  inverse: stbd_to_m3d

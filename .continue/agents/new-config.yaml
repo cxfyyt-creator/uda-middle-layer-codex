@@ -1,0 +1,10 @@
+name: My Config
+version: 1.0.0
+schema: v1
+
+models:
+  - name: xyai Codex
+    provider: openai
+    model: gpt-5.3-codex
+    apiKey: sk-KsE2069gCmLQ2k4JOyvM2eVCojZ60TM6
+    apiBase: https://new.xychatai.com/codex/v1
