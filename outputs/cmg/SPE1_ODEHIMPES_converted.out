@@ -1,0 +1,337 @@
+  ********************************************************************************
+  *                                                                              *
+  *                                IMEX  2021.10                                 *
+  *            Adaptive-Implicit Black Oil & Unconventional Simulator            *
+  *                         General Release for Win x64                          *
+  *                            2021-Nov-16   12:35:59                            *
+  *                                                                              *
+  *                          (c) Copyright 1977 - 2021                           *
+  *                Computer Modelling Group Ltd., Calgary, Canada                *
+  *                             All Rights Reserved                              *
+  *                                                                              *
+  ********************************************************************************
+
+
+  Command-line Arguments:  -f SPE1_ODEHIMPES_converted.dat
+                           -wd D:\01_projects\uda_middle_layer_codex\outputs\cmg
+                           -wait
+                           -doms
+                           -parasol 12
+
+  Date and Time of Start of Run:  Mar 12, 2026  10:20:20
+
+     IMEX is using the following common block maximums:
+
+     Grid Blocks        =         300          Wells                =    2
+     Total well layers  =           2          Constraints per well =    4
+     Orthogonalizations =          30          Table Entries        =   12
+ 
+ ===================== WARNING (from subroutine: INDYNM) ======================
+  Hyperthreading is turned ON. Will report Logical CPUs.
+  Setting affinity (e.g.,"compact,1") may improve run time ()...
+ ==============================================================================
+ 
+ 
+ ===================== SUMMARY (from subroutine: INDYNM) ======================
+  Dimensioning scanning of data is complete.
+  Simulation will stop if there were error messages.
+     1 Warning messages.    0 Error messages.
+ ==============================================================================
+ 
+ 
+ 
+ ** **************************************************************************
+ ** I/O Control Section
+ ** **************************************************************************
+ RESULTS SIMULATOR IMEX
+ 
+ ** Generated from: SPE1_ODEHIMPES.DATA  (2026-03-12)
+ 
+
+
+     Beginning data file reading and echo . . .
+ *INUNIT *FIELD
+ 
+ ** **************************************************************************
+ ** Reservoir Description Section
+ ** **************************************************************************
+ *GRID *CART  10  10  3
+ *DI *CON 1000
+ *DJ *CON 1000
+ *DK *KVAR
+    50  30  20
+ *DEPTH  1  1  1  8350
+ 
+ ** Rock Properties
+ *POR *CON 0.3
+ *PERMI *CON 200
+ *PERMJ *CON 200
+ *PERMK *CON 200
+ *PRPOR  14.7
+ *CPOR  3.000000E-06
+ 
+ ** **************************************************************************
+ ** Component Property Section
+ ** **************************************************************************
+ *MODEL *BLACKOIL
+ 
+ *PVT
+ **            p            rs            bo            eg          viso          visg
+           14.7         0.001         1.062   0.006000024          1.04         0.008
+          264.7        0.0905          1.15  0.08269246672         0.975        0.0096
+          514.7          0.18         1.207  0.1593879503          0.91        0.0112
+         1014.7         0.371         1.295  0.3127932437          0.83         0.014
+         2014.7         0.636         1.435  0.6195786865         0.695        0.0189
+         2514.7         0.775           1.5   0.772797527         0.641        0.0208
+         3014.7          0.93         1.565  0.9259259259         0.594        0.0228
+         4014.7          1.27         1.695   1.233045623          0.51        0.0268
+         5014.7          1.27         1.671   1.540832049         0.549        0.0309
+         9014.7          1.27         1.579   2.590673575          0.74         0.047
+         5014.7         1.618         1.827   1.540832049         0.449        0.0309
+         9014.7         1.618         1.726   2.590673575         0.605         0.047
+ 
+
+ ====================== ERROR (from subroutine: TBLCHK) =======================
+  PVT TABLE 1 is in error. Entry 11 for Press. is constant or 
+  decreasing but should be increasing.
+  Line: 49   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ====================== ERROR (from subroutine: TBLCHK) =======================
+  PVT TABLE 1 is in error. Entry 9 for Rs is constant or 
+  decreasing but should be increasing.
+  Line: 49   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ====================== ERROR (from subroutine: TBLCHK) =======================
+  PVT TABLE 1 is in error. Entry 10 for Rs is constant or 
+  decreasing but should be increasing.
+  Line: 49   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ====================== ERROR (from subroutine: TBLCHK) =======================
+  PVT TABLE 1 is in error. Entry 11 for Rs is constant or 
+  decreasing but should be increasing.
+  Line: 49   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ====================== ERROR (from subroutine: TBLCHK) =======================
+  PVT TABLE 1 is in error. Entry 12 for Rs is constant or 
+  decreasing but should be increasing.
+  Line: 49   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ====================== ERROR (from subroutine: TBLCHK) =======================
+  PVT TABLE 1 is in error. Entry 9 for Bo is decreasing 
+  but should be increasing.
+  Line: 49   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ====================== ERROR (from subroutine: TBLCHK) =======================
+  PVT TABLE 1 is in error. Entry 10 for Bo is decreasing 
+  but should be increasing.
+  Line: 49   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ====================== ERROR (from subroutine: TBLCHK) =======================
+  PVT TABLE 1 is in error. Entry 11 for Bo is decreasing 
+  but should be increasing.
+  Line: 49   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ====================== ERROR (from subroutine: TBLCHK) =======================
+  PVT TABLE 1 is in error. Entry 12 for Bo is decreasing 
+  but should be increasing.
+  Line: 49   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ====================== ERROR (from subroutine: TBLCHK) =======================
+  PVT TABLE 1 is in error. Entry 9 for Viso is constant or 
+  increasing but should be decreasing.
+  Line: 49   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ====================== ERROR (from subroutine: TBLCHK) =======================
+  PVT TABLE 1 is in error. Entry 10 for Viso is constant or 
+  increasing but should be decreasing.
+  Line: 49   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ====================== ERROR (from subroutine: TBLCHK) =======================
+  PVT TABLE 1 is in error. Entry 11 for Viso is constant or 
+  increasing but should be decreasing.
+  Line: 49   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ====================== ERROR (from subroutine: TBLCHK) =======================
+  PVT TABLE 1 is in error. Entry 12 for Viso is constant or 
+  increasing but should be decreasing.
+  Line: 49   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ===================== WARNING (from subroutine: TBLCHK) ======================
+  PVT TABLE 1 is in error. Entry 11 for Rs/Bo is decreasing
+  but should be increasing.
+  Line: 49   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+ *DENSITY *OIL  49.1
+ *DENSITY *GAS  0.06054
+ *DENSITY *WATER  64.79
+ *BWI  1.029
+ *CW  3.130000E-06
+ *REFPW  4014.7
+ *VWI  0.31
+ *CVW  0.0
+ 
+ ** **************************************************************************
+ ** Rock-Fluid Property Section
+ ** **************************************************************************
+
+ ===================== WARNING (from subroutine: INCOMP) ======================
+  P/Z Output is disabled as Temperatures were not defined for all PVT Regions
+  Please review the *TRES Keyword
+  Line: 61   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ====================== ERROR (from subroutine: INCOMP) =======================
+  Oil compressibility was not specified.  One of *CO, *COT/BOT or the PVT table must be used
+   to specify co.  Please see the User's Manual.
+  Line: 61   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ===================== WARNING (from subroutine: PVTCHK) ======================
+  In PVT Table 1 Entry (i=) 7
+  dRs/DP(i) < 1e-12 or dRs/DP(i+1) < 1e-12. Please review the the data.
+ ==============================================================================
+
+
+ ===================== WARNING (from subroutine: PVTCHK) ======================
+  In PVT Table 1 Entry (i=) 8
+  dRs/DP(i) < 1e-12 or dRs/DP(i+1) < 1e-12. Please review the the data.
+ ==============================================================================
+
+
+ ===================== WARNING (from subroutine: PVTCHK) ======================
+  In PVT Table 1 Entry (i=) 9
+  dRs/DP(i) < 1e-12 or dRs/DP(i+1) < 1e-12. Please review the the data.
+ ==============================================================================
+
+
+ ===================== WARNING (from subroutine: PVTCHK) ======================
+  In PVT Table 1 Entry (i=) 10
+  dRs/DP(i) < 1e-12 or dRs/DP(i+1) < 1e-12. Please review the the data.
+ ==============================================================================
+
+
+ ===================== WARNING (from subroutine: PVTCHK) ======================
+  PVT Table 1 Entry (i=) 11
+  Calculated Eg does not increase with pressure. Please review your EG/BG/ZG Data
+ ==============================================================================
+
+
+ ===================== WARNING (from subroutine: PVTCHK) ======================
+  IMEX has detected Eg does not increase with pressure.
+  Please correct above entries to avoid poor performance.
+ ==============================================================================
+
+ *ROCKFLUID
+ *RPT 1
+ *SWT
+ **            sw           krw          krow          pcow
+             0.12           0.0             1           0.0
+                1  1.000000E-05           0.0           0.0
+ *SLT
+ **            sl           krg          krog          pcog
+              0.0             1           0.0           0.0
+             0.15          0.98           0.0           0.0
+              0.3          0.94  2.800000E-04           0.0
+              0.4          0.87        0.0046           0.0
+              0.5          0.72        0.0348           0.0
+             0.55           0.6        0.0693           0.0
+              0.6          0.41         0.134           0.0
+              0.7          0.19        0.4375           0.0
+             0.75         0.125       0.65625           0.0
+              0.8         0.075          0.86           0.0
+             0.88         0.025             1           0.0
+             0.95         0.005             1           0.0
+             0.98           0.0             1           0.0
+                1           0.0             1           0.0
+ 
+ ** **************************************************************************
+ ** Initial Conditions Section
+ ** **************************************************************************
+ *INITIAL
+ *VERTICAL *BLOCK_CENTER *WATER_OIL_GAS
+ *REFPRES  4800
+ *REFDEPTH  8400
+ *DWOC  8500
+ *DGOC  8200
+ 
+ ** **************************************************************************
+ ** Well and Recurrent Data Section
+ ** **************************************************************************
+
+ ====================== ERROR (from subroutine: ININIT) =======================
+  The *PB keyword is required in the INITIAL CONDITIONS SECTION.
+  Both *PB *MATRIX and*PB *FRACTURE are needed for dual porosity.
+  Line: 97   File Name: SPE1_ODEHIMPES_converted.dat
+ ==============================================================================
+
+
+ ===================== WARNING (from subroutine: PSSLDS) ======================
+  Chosen direction has too few slabs containing active blocks (10) to support *AUTOPSLAB 12 ;
+  Treating the partition as *AUTOPSLAB 5 .
+ ==============================================================================
+
+
+ ===================== SUMMARY (from subroutine: INDATA) ======================
+  Reading of initial data is complete.
+  Simulation will stop if there were error messages.
+     9 Warning messages.   15 Error messages.
+ ==============================================================================
+
+  Terminating simulation: Errors in input.
+
+
+     ***********************************************
+     A V A I L A B L E    R E S T A R T    T I M E S
+     ***********************************************
+
+     No restart information is available.
+
+  Total Number of Solver Failures:       0  Stalls:       0  ITERMAX Reached:       0
+  Jacobian Domains     12  (DOMS)
+  Total lstpro/lstpar calls:     1  (    0)
+  Linear Solver: Parasol
+  Number of level 1 solver classes:    5
+  AUTOPSLAB Cutting Direction:    J
+  Preconditioner Ordering: REDBLACK
+  Preconditioner Degree aa, ab, as, bb, ba:    1    2    1    1    1
+  KMP_AFFINITY: Default
+  OMP_SCHEDULE: Default
+  Number of threads set:   12
+  Total number of logical cpus:   24
+  Host computer: DESKTOP-IGE8EFR
+  CPU Time:             0.45 seconds
+  Elapsed Time:         0.23 seconds
+
+  End of Simulation: Abnormal Termination
+
+  Date and Time of End of Run:  Mar 12, 2026  10:20:20
+
