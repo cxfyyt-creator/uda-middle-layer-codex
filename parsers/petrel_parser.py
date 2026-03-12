@@ -57,7 +57,7 @@ def _tokenize(filepath):
             i = 0
             while i < len(line):
                 c = line[i]
-                if c in (" ", "\t", "\r"):
+                if c in (" ", "\t", "\r", ","):  # 逗号也作分隔符（兼容 SPE2 格式）
                     i += 1
                 elif c == "'":
                     j = line.find("'", i+1)
@@ -70,7 +70,7 @@ def _tokenize(filepath):
                     i += 1
                 else:
                     j = i + 1
-                    while j < len(line) and line[j] not in (" ","\t","\r","/","'"):
+                    while j < len(line) and line[j] not in (" ","\t","\r","/","'",","):
                         j += 1
                     tokens.append((lineno, line[i:j]))
                     i = j
@@ -106,28 +106,57 @@ class PetrelParser:
             pass
         return bool(re.match(r'^[A-Z][A-Z0-9_]*$', tok))
 
+    # 这些关键字在行内出现时应该被跳过（不作为块结束标志）
+    _INLINE_SKIP = {"FIELD", "METRIC", "LAB", "SI"}
+
     def _read_until_slash(self):
         """读取词元直到 /（含），展开 N*value，返回 token 字符串列表。
-        对于 N*（无后续值）形式的占位符，展开为 N 个 '1*' 占位字符串。"""
+
+        关键规则：
+        - 遇到 / 停止，并消耗同行剩余的多余词（行内注释）
+        - 遇到已知单位标志（FIELD/METRIC）或时间戳词（含 :）跳过
+        - 遇到其他关键字词元 → 块结束，不消耗（但如果和上一个 token 同行，也跳过）
+        """
         result = []
+        slash_lineno = None
+        last_lineno = None
+
         while self._peek():
-            _, tok = self._peek()
+            lineno, tok = self._peek()
+
             if tok == "/":
                 self.pos += 1
+                slash_lineno = lineno
+                # 消耗 / 之后同一行的多余词（行内注释）
+                while self._peek():
+                    next_lineno, next_tok = self._peek()
+                    if next_lineno != slash_lineno:
+                        break
+                    if next_tok == "/" or next_tok.startswith("'"):
+                        break
+                    self.pos += 1
                 break
-            # 遇到关键字词元（非数值、非引号）→ 当前块已结束，不消耗
+
+            # 行内单位标志和时间戳 token 跳过
+            if tok.upper() in self._INLINE_SKIP or ":" in tok:
+                self.pos += 1
+                last_lineno = lineno
+                continue
+
+            # 遇到关键字词元
             if self._is_kw_tok(tok):
+                # 如果和上一个 token 同行（行内注释），跳过
+                if last_lineno is not None and lineno == last_lineno:
+                    self.pos += 1
+                    continue
+                # 否则是新行的真实关键字 → 块结束，不消耗
                 break
 
             self.pos += 1
-            # N*value 展开为数值列表
+            last_lineno = lineno
             exp = _expand_repeat(tok)
             if exp is not None:
                 result.extend([str(v) for v in exp])
-            # N* 纯占位符（如 4*）→ 展开为 N 个 '1*'
-            elif re.match(r'^\d+\*$', tok):
-                n = int(tok[:-1])
-                result.extend(['1*'] * n)
             else:
                 result.append(tok)
         return result
@@ -191,19 +220,18 @@ class PetrelParser:
           'KW'  value  [I1 I2 J1 J2 K1 K2]  /
           ...
         /   (空记录终止)
-
-        关键逻辑：同一属性可能被多次赋值（先全场赋默认值，再按层覆盖），
-        需要累积成正确的 KVAR 数组。
         """
         kw_map = {
-            "DX":   ("grid","di","ft"),
-            "DY":   ("grid","dj","ft"),
-            "DZ":   ("grid","dk","ft"),
-            "TOPS": ("grid","tops_ref","ft"),
-            "PORO": ("reservoir","porosity","fraction"),
-            "PERMX":("reservoir","perm_i","md"),
-            "PERMY":("reservoir","perm_j","md"),
-            "PERMZ":("reservoir","perm_k","md"),
+            "DX":     ("grid","di","ft"),
+            "DY":     ("grid","dj","ft"),
+            "DZ":     ("grid","dk","ft"),
+            "TOPS":   ("grid","tops_ref","ft"),
+            "DTHETA": ("grid","dtheta","deg"),   # 径向网格角度
+            "PORO":   ("reservoir","porosity","fraction"),
+            "PERMX":  ("reservoir","perm_i","md"),
+            "PERMY":  ("reservoir","perm_j","md"),
+            "PERMZ":  ("reservoir","perm_k","md"),
+            "PERMR":  ("reservoir","perm_i","md"),  # 径向渗透率 → perm_i
         }
         while self._peek():
             row = self._read_until_slash()
@@ -230,55 +258,64 @@ class PetrelParser:
             nj  = R["grid"].get("nj", 1)
             nk  = R["grid"].get("nk", 1)
 
-            def _get_or_init_vals(section, key, nk, default=None):
-                """获取已有数组或初始化 nk 长度列表"""
-                existing = R[section].get(key)
-                if existing and existing["type"] == "array":
-                    return existing["values"][:]
-                elif existing and existing["type"] == "scalar":
-                    return [existing["value"]] * nk
-                else:
-                    return [default] * nk
-
-            def _commit(section, key, unit, src, vals_list):
-                """将 vals 列表存回 R（自动判断 CON 或 KVAR）"""
-                vals_list = [v if v is not None else 0.0 for v in vals_list]
-                if len(set(vals_list)) == 1:
-                    R[section][key] = _scalar(vals_list[0], unit, src, modifier="CON")
-                else:
-                    R[section][key] = _array(vals_list, unit, src, modifier="KVAR")
-
             if box and len(box) == 6:
                 i1,i2,j1,j2,k1,k2 = box
                 is_full_layer = (i1==1 and i2==ni and j1==1 and j2==nj)
-                if is_full_layer:
-                    # 全层（单层或多层）赋值 → 建立 / 更新 KVAR 数组
-                    vals_list = _get_or_init_vals(section, key, nk)
-                    for k in range(k1-1, min(k2, nk)):
-                        vals_list[k] = value
-                    _commit(section, key, unit, src, vals_list)
+                if is_full_layer and k1 == k2:
+                    # 单层赋值 → 建立 KVAR 数组
+                    existing = R[section].get(key)
+                    if existing and existing["type"] == "array":
+                        vals_list = existing["values"][:]
+                    elif existing and existing["type"] == "scalar":
+                        vals_list = [existing["value"]] * nk
+                    else:
+                        vals_list = [None] * nk
+                    vals_list[k1-1] = value
+                    vals_list = [v if v is not None else 0.0 for v in vals_list]
+                    if len(set(vals_list)) == 1:
+                        R[section][key] = _scalar(vals_list[0], unit, src, modifier="CON")
+                    else:
+                        R[section][key] = _array(vals_list, unit, src, modifier="KVAR")
+                elif is_full_layer and k1 != k2:
+                    # 多层连续赋值
+                    existing = R[section].get(key)
+                    if existing and existing["type"] == "array":
+                        vals_list = existing["values"][:]
+                    elif existing and existing["type"] == "scalar":
+                        vals_list = [existing["value"]] * nk
+                    else:
+                        vals_list = [None] * nk
+                    for k in range(k1-1, k2):
+                        if k < nk:
+                            vals_list[k] = value
+                    vals_list = [v if v is not None else 0.0 for v in vals_list]
+                    if len(set(vals_list)) == 1:
+                        R[section][key] = _scalar(vals_list[0], unit, src, modifier="CON")
+                    else:
+                        R[section][key] = _array(vals_list, unit, src, modifier="KVAR")
                 else:
-                    # 局部 BOX（非全层）→ 只有当该属性尚未设置时才用 CON 初始化
+                    # 局部 BOX（非全层）→ CON 简化
                     if R[section].get(key) is None:
                         R[section][key] = _scalar(value, unit, src+" BOX", modifier="CON")
-                    else:
-                        # 已有全场/全层值，局部 BOX 覆盖较复杂，简单更新对应层
-                        vals_list = _get_or_init_vals(section, key, nk)
-                        # 只更新 BOX 范围内的 k 层（近似：忽略 ij 范围）
-                        for k in range(k1-1, min(k2, nk)):
-                            vals_list[k] = value
-                        _commit(section, key, unit, src, vals_list)
             else:
-                # 无 BOX → 全场常数（但不覆盖已有的 KVAR 逐层设置）
-                # 如果已有 KVAR 数组，全场赋值会用 None 初始化，不能覆盖；
-                # 通常全场常数先出现，再被逐层覆盖，所以这里直接设标量。
-                R[section][key] = _scalar(value, unit, src, modifier="CON")
+                # 无 BOX → 全场常数，但如果已有值则累积到数组（SPE2 格式：每层单独赋值无 BOX）
+                existing = R[section].get(key)
+                if existing is None:
+                    R[section][key] = _scalar(value, unit, src, modifier="CON")
+                elif existing["type"] == "scalar":
+                    # 第二次赋值：说明是逐层赋值，转为数组
+                    R[section][key] = _array([existing["value"], value], unit, src, modifier="KVAR")
+                elif existing["type"] == "array":
+                    existing["values"].append(value)
+                    existing["modifier"] = "KVAR"
 
     def _parse_copy(self, R):
         copy_map = {
             ("PERMX","PERMY"): ("perm_i","perm_j"),
             ("PERMX","PERMZ"): ("perm_i","perm_k"),
             ("PERMY","PERMZ"): ("perm_j","perm_k"),
+            ("PERMR","PERMZ"): ("perm_i","perm_k"),  # SPE2: 径向渗透率复制到垂向
+            ("PERMR","PERMY"): ("perm_i","perm_j"),
         }
         while self._peek():
             row = self._read_until_slash()
@@ -397,8 +434,26 @@ class PetrelParser:
         if rows:
             R["fluid"]["pvdg_table"] = _table(["p","bg","visg"], rows, "PROPS PVDG")
 
-    def _parse_table_kw(self, ncols, cols, key, section, src, R):
-        """通用相渗表解析：读到下一个关键字停止，按列数切分"""
+    def _skip_rest_of_line(self):
+        """跳过当前 token 所在行的所有剩余内容（不含 /），直到换行。
+        用于处理关键字同行有垃圾文字的情况，如：
+          SGFN   1 TABLES  19 NODES IN EACH   FIELD  16:31 18 JAN 85
+        调用此方法后，下一个 token 将是下一行的第一个。
+        """
+        if not self._peek():
+            return
+        cur_lineno = self._peek()[0]
+        while self._peek():
+            lineno, tok = self._peek()
+            if lineno != cur_lineno:
+                break   # 换行了，停止
+            self.pos += 1  # 跳过同行 token
+
+    def _parse_table_kw(self, ncols, cols, key, section, src, R, kw_lineno=None):
+        """通用相渗表解析：若关键字同行有垃圾内容则先跳过，再读表格数据"""
+        # 只有当下一个 token 和关键字在同一行时，才跳过行内垃圾
+        if kw_lineno is not None and self._peek() and self._peek()[0] == kw_lineno:
+            self._skip_rest_of_line()
         nums = self._read_floats_until_keyword()
         rows = []
         i = 0
@@ -408,25 +463,20 @@ class PetrelParser:
         if rows:
             R[section][key] = _table(cols, rows, src)
 
-    def _parse_swfn(self, R):
-        # Sw  KRW  PCOW  /  (每行有/)
-        self._parse_table_kw(3, ["sw","krw","pcow"], "swfn_table", "rockfluid", "PROPS SWFN", R)
+    def _parse_swfn(self, R, lineno=None):
+        self._parse_table_kw(3, ["sw","krw","pcow"], "swfn_table", "rockfluid", "PROPS SWFN", R, lineno)
 
-    def _parse_sgfn(self, R):
-        # Sg  KRG  PCOG  /
-        self._parse_table_kw(3, ["sg","krg","pcog"], "sgfn_table", "rockfluid", "PROPS SGFN", R)
+    def _parse_sgfn(self, R, lineno=None):
+        self._parse_table_kw(3, ["sg","krg","pcog"], "sgfn_table", "rockfluid", "PROPS SGFN", R, lineno)
 
-    def _parse_sof3(self, R):
-        # So  KROW  KROG  /
-        self._parse_table_kw(3, ["so","krow","krog"], "sof3_table", "rockfluid", "PROPS SOF3", R)
+    def _parse_sof3(self, R, lineno=None):
+        self._parse_table_kw(3, ["so","krow","krog"], "sof3_table", "rockfluid", "PROPS SOF3", R, lineno)
 
-    def _parse_swof(self, R):
-        # Sw  KRW  KROW  PCOW  /
-        self._parse_table_kw(4, ["sw","krw","krow","pcow"], "swt_table", "rockfluid", "PROPS SWOF", R)
+    def _parse_swof(self, R, lineno=None):
+        self._parse_table_kw(4, ["sw","krw","krow","pcow"], "swt_table", "rockfluid", "PROPS SWOF", R, lineno)
 
-    def _parse_sgof(self, R):
-        # Sg  KRG  KROG  PCOG  /
-        self._parse_table_kw(4, ["sg","krg","krog","pcog"], "slt_table", "rockfluid", "PROPS SGOF", R)
+    def _parse_sgof(self, R, lineno=None):
+        self._parse_table_kw(4, ["sg","krg","krog","pcog"], "slt_table", "rockfluid", "PROPS SGOF", R, lineno)
 
     def _parse_equil(self, R):
         # DATUM_DEPTH  DATUM_PRES  OWC  PCWOC  GOC  PCGOC  ...  /
@@ -441,18 +491,13 @@ class PetrelParser:
                 R["initial"]["goc_depth"] = _scalar(vals[4], "ft", src)
 
     def _parse_rsvd(self, R):
-        # SPE1 格式：8200 1.270\n 8500 1.270 /  —— 所有行共用一个末尾 /
-        # 也兼容每行有 / 的格式（_read_floats_until_slash 会忽略中间 /）
-        nums = self._read_floats_until_slash()
+        # DEPTH  RS  /  ...  /
         rows = []
-        i = 0
-        while i + 1 < len(nums):
-            rows.append([nums[i], nums[i+1]])
-            i += 2
-        if rows:
-            R["initial"]["rsvd_table"] = _table(["depth","rs"], rows, "SOLUTION RSVD")
-            R["initial"]["solution_gor"] = _scalar(rows[0][1], "scf/STB",
-                                                    "SOLUTION RSVD (first row)")
+        while self._peek():
+            nums = self._read_floats_until_slash()
+            if not nums: break
+            if len(nums) >= 2:
+                rows.append([nums[0], nums[1]])
         if rows:
             R["initial"]["rsvd_table"] = _table(["depth","rs"], rows, "SOLUTION RSVD")
             R["initial"]["solution_gor"] = _scalar(rows[0][1], "scf/STB",
@@ -469,19 +514,24 @@ class PetrelParser:
         """
         'WELLNAME' 'GROUP' I J REFDEPTH PHASE [...] /
         最后空 / 结束块。
+        行首可能有时间戳垃圾（如 18 JAN 85），从第一个引号 token 开始解析。
         """
         while self._peek():
             row = self._read_until_slash()
             if not row:
                 break
-            strs = [str(t).strip("'") for t in row]
+            # 找到第一个引号字符串的位置（井名必须是引号字符串）
+            start = next((i for i, t in enumerate(row) if str(t).startswith("'")), None)
+            if start is None:
+                continue
+            strs = [str(t).strip("'") for t in row[start:]]
             if len(strs) < 4:
                 continue
             name  = strs[0]
             group = strs[1]
             try:
-                ci = int(strs[2])
-                cj = int(strs[3])
+                ci = int(float(strs[2]))
+                cj = int(float(strs[3]))
             except ValueError:
                 continue
             phase = strs[5].upper() if len(strs) > 5 else "OIL"
@@ -521,34 +571,15 @@ class PetrelParser:
             except ValueError:
                 continue
             status = strs[5].upper() if len(strs) > 5 else "OPEN"
-            # 井眼直径在 COMPDAT 第8列（0-indexed）：
-            # WELLNAME I J K1 K2 STATUS SATNUM CF DIAM ...
-            # 0        1 2 3  4  5      6      7  8
-            # SATNUM 是整数表索引，CF 通常为负（-1=计算），DIAM 是正小数
-            # 策略：取 strs[8] 若存在且为正小数；否则从 strs[6:] 找第一个正小数（非整数）
+            # 井眼直径：跳过 N* 占位符，找第一个纯数字
             diam = None
-            # 先尝试列索引8
-            if len(strs) > 8:
-                s = strs[8]
-                if s != '1*':
-                    try:
-                        v = _to_float(s)
-                        if v > 0 and v != int(v):   # 排除整数（表索引）
-                            diam = v
-                    except ValueError:
-                        pass
-            # 退而求其次：从strs[6:]找第一个正小数
-            if diam is None:
-                for s in strs[6:]:
-                    if s == '1*' or re.match(r'^\d+\*$', s):
-                        continue
-                    try:
-                        v = _to_float(s)
-                        if v > 0 and (v != int(v) or v < 1.0):
-                            diam = v
-                            break
-                    except ValueError:
-                        continue
+            for s in strs[6:]:
+                if re.match(r'^\d+\*$', s):
+                    continue
+                try:
+                    diam = _to_float(s); break
+                except ValueError:
+                    continue
             w = self._find_well(name, R)
             if w is None:
                 continue
@@ -646,6 +677,110 @@ class PetrelParser:
                 pass
         return current_time
 
+    def _parse_multiply(self, R):
+        """MULTIPLY: 对已有数组乘以系数。格式：'ARRAY'  FACTOR  [BOX]  /"""
+        multiply_map = {
+            "PERMX":("reservoir","perm_i"), "PERMY":("reservoir","perm_j"),
+            "PERMZ":("reservoir","perm_k"), "PERMR":("reservoir","perm_i"),
+            "PORO": ("reservoir","porosity"),
+        }
+        while self._peek():
+            row = self._read_until_slash()
+            if not row:
+                break
+            kw_raw = row[0].strip("'").upper()
+            if kw_raw not in multiply_map:
+                continue
+            try:
+                factor = _to_float(row[1])
+            except (IndexError, ValueError):
+                continue
+            sec, key = multiply_map[kw_raw]
+            obj = R[sec].get(key)
+            if obj is None:
+                continue
+            if obj["type"] == "scalar":
+                obj["value"] *= factor
+            elif obj["type"] == "array":
+                obj["values"] = [v * factor for v in obj["values"]]
+
+    def _parse_weltarg(self, R):
+        """WELTARG：动态修改井的操作目标。格式：'WELLNAME'  'TARGET'  VALUE  /"""
+        while self._peek():
+            row = self._read_until_slash()
+            if not row:
+                break
+            strs = [str(t).strip("'") for t in row]
+            if len(strs) < 3:
+                continue
+            name, target = strs[0], strs[1].upper()
+            try:
+                value = _to_float(strs[2])
+            except ValueError:
+                continue
+            w = self._find_well(name, R)
+            if w is None:
+                continue
+            w["alter_schedule"].append({"target": target, "value": value})
+            if target == "ORAT":
+                w["rate_max"] = value
+            elif target == "BHP":
+                w["bhp_min"] = value
+
+    def _auto_consume_unknown(self, keyword, lineno, section, R):
+        """
+        【核心：拼音规则】
+        遇到不认识的关键字，自动推断格式并消耗 tokens，存档备查。
+        不再静默丢弃，而是记录下来。
+
+        推断逻辑：
+          下一个token是关键字/文件末 → flag（无参数）
+          下一个token是 /           → 空记录
+          下一个token是引号字符串   → 记录表（多行，空/结束）
+          下一个token是数字         → 数值列表或数组
+          其他                      → 跳到最近的 /
+        """
+        peek = self._peek()
+        if peek is None:
+            return {"format": "flag", "section": section, "line": lineno}
+
+        _, next_tok = peek
+
+        if self._is_kw_tok(next_tok):
+            return {"format": "flag", "section": section, "line": lineno}
+
+        if next_tok == "/":
+            self.pos += 1
+            return {"format": "empty_record", "section": section, "line": lineno}
+
+        if next_tok.startswith("'"):
+            rows = []
+            while self._peek():
+                row = self._read_until_slash()
+                if not row:
+                    break
+                rows.append(row)
+            return {"format": "record_table", "section": section,
+                    "line": lineno, "rows": rows}
+
+        try:
+            _to_float(next_tok)
+            saved_pos = self.pos
+            vals = self._read_floats_until_slash()
+            more = self._peek()
+            if more and not self._is_kw_tok(more[1]) and more[1] != "/":
+                self.pos = saved_pos
+                all_vals = self._read_floats_until_keyword()
+                return {"format": "array_or_table", "section": section,
+                        "line": lineno, "values": all_vals, "count": len(all_vals)}
+            return {"format": "value_list", "section": section,
+                    "line": lineno, "values": vals, "count": len(vals)}
+        except (ValueError, TypeError):
+            pass
+
+        self._skip_to_slash()
+        return {"format": "unknown_skipped", "section": section, "line": lineno}
+
     # ── 主循环 ────────────────────────────────────────────────────────────────
 
     def parse(self):
@@ -670,43 +805,86 @@ class PetrelParser:
 
         current_time = 0.0
 
-        # 跳过不含 / 的纯标志关键字
+        # ── 关键字注册表：按"格式类型"分组，而非按关键字名称 ──────────────────
+        #
+        # 思路：Eclipse 有 1000+ 关键字，但格式只有几种。
+        # 把关键字归类到格式类型里，parser 只学会读格式，不需要认识每个关键字。
+        # 遇到注册表里没有的新关键字 → 自动推断格式类型 → 存入 unknown_keywords。
+        #
+        # 格式类型说明：
+        #   flag          : 关键字单独一行，无参数（OIL, RADIAL, DISGAS...）
+        #   unit_flag     : 同上，但影响单位系统（FIELD, METRIC, LAB）
+        #   section_marker: 段名，标记当前解析段（RUNSPEC, GRID, PROPS...）
+        #   skip_to_slash : 有参数但我们不关心，直接跳到 /（TUNING, EQLDIMS...）
+        #   special       : 有专门解析函数的关键字
+
         FLAG_KWS = {
-            "OIL","WATER","GAS","DISGAS","VAPOIL","FIELD","METRIC","LAB","SI",
+            "OIL","WATER","GAS","DISGAS","VAPOIL",
             "FMTOUT","FMTIN","UNIFOUT","UNIFIN","NONNC","RUNSUM","ALL",
             "MSUMLINES","MSUMNEWT","SEPARATE","IMPES","IMPLICIT",
-            # 段名
-            "RUNSPEC","GRID","EDIT","PROPS","REGIONS","SOLUTION","SUMMARY","SCHEDULE",
+            "RADIAL","CART","CORNER",  # 网格类型标志
         }
-        # 带 / 结尾的输出控制关键字（直接跳到斜杠）
+        UNIT_FLAG_KWS = {"FIELD": "field", "METRIC": "metric", "LAB": "lab", "SI": "si"}
+        SECTION_KWS = {"RUNSPEC","GRID","EDIT","PROPS","REGIONS","SOLUTION","SUMMARY","SCHEDULE"}
         SKIP_TO_SLASH_KWS = {
-            "EQLDIMS","TABDIMS","WELLDIMS","NUPCOL","NSTACK","NUPCOIL",
+            "EQLDIMS","TABDIMS","WELLDIMS","REGDIMS","NUPCOL","NSTACK","NUPCOIL",
             "TUNING","DRSDT","RPTSCHED","RPTGRID","RPTPROPS","RPTSOL","RPTSUM",
-            "IMPES",
-            # SUMMARY 报告关键字
-            "WGOR","WBHP","BGSAT","BOSAT","BPR","FOPR",
-            "PBVD",
+            "RPTREGS","RPTSMRY","FIPNUM","COLUMNS","DEBUG","NUPCOL",
+            # SUMMARY 输出请求关键字（单独一行或带井名列表，跳过即可）
+            "FOPR","FWPR","FLPR","FVPR","FWCT","FGOR","FPR","WBHP","WGOR",
+            "BGSAT","BOSAT","BPR","PBVD","WOPR","WWPR","WGPR","WWCT",
+            "MSUMLINS","MSUMNEWT","SEPARATE",
         }
+        SPECIAL_KWS = {
+            "TITLE","DIMENS","START",
+            "DRV","INRAD","DTHETA",
+            "DX","DY","DZ","TOPS","PORO","PERMX","PERMY","PERMZ",
+            "PERMR","PERMZ",
+            "EQUALS","COPY","MULTIPLY",
+            "PVTW","ROCK","DENSITY","PVTO","PVDG","PVDO",
+            "SWFN","SGFN","SOF3","SWOF","SGOF",
+            "EQUIL","RSVD",
+            "WELSPECS","COMPDAT","WCONPROD","WCONINJE","WELTARG",
+            "TSTEP","DATES","END",
+        }
+
+        # 当前解析段（用于给 unknown_keywords 分类）
+        current_section = "RUNSPEC"
 
         while self._peek():
             lineno, tok = self._next()
             u = tok.upper()
 
-            if u in FLAG_KWS:
-                if u == "METRIC": R["meta"]["unit_system"] = "metric"
-                elif u == "FIELD": R["meta"]["unit_system"] = "field"
-                elif u == "LAB":   R["meta"]["unit_system"] = "lab"
+            # ── 1. 段名：更新当前段，不消耗数据 ─────────────────────────────
+            if u in SECTION_KWS:
+                current_section = u
+                # RADIAL 网格标志在 GRID 段
+                if u == "GRID":
+                    R["grid"].setdefault("grid_type", "CART")
                 continue
 
+            # ── 2. 单位标志 ──────────────────────────────────────────────────
+            if u in UNIT_FLAG_KWS:
+                R["meta"]["unit_system"] = UNIT_FLAG_KWS[u]
+                continue
+
+            # ── 3. 纯标志关键字（无参数）────────────────────────────────────
+            if u in FLAG_KWS:
+                if u == "RADIAL":
+                    R["grid"]["grid_type"] = "RADIAL"
+                continue
+
+            # ── 4. 跳过类关键字（有参数但不关心）───────────────────────────
             if u in SKIP_TO_SLASH_KWS:
                 self._skip_to_slash()
                 continue
 
-            # ── RUNSPEC ──
-            if u == "TITLE":
-                self._read_until_slash()    # 消耗标题行
-                continue
-            if u == "DIMENS":
+            # ── 5. 有专门解析函数的关键字 ────────────────────────────────────
+            if u == "END":
+                break
+            elif u == "TITLE":
+                self._read_until_slash()
+            elif u == "DIMENS":
                 self._parse_dimens(R)
             elif u == "START":
                 row = self._read_until_slash()
@@ -719,46 +897,61 @@ class PetrelParser:
                         R["meta"]["start_date"] = f"{year:04d}-{mon:02d}-{day:02d}"
                     except (ValueError, IndexError):
                         pass
-
-            # ── GRID ──
-            elif u in ("DX","DY","DZ","TOPS","PORO","PERMX","PERMY","PERMZ"):
+            elif u in ("INRAD",):
+                # 径向网格内径，单值
+                vals = self._read_floats_until_slash()
+                if vals:
+                    R["grid"]["inrad"] = _scalar(vals[0], "ft", "GRID INRAD")
+            elif u == "DRV":
+                # 径向方向网格步长数组
+                vals = self._read_floats_until_slash()
+                if vals:
+                    R["grid"]["drv"] = _array(vals, "ft", "GRID DRV")
+            elif u in ("DX","DY","DZ","TOPS","PORO","PERMX","PERMY","PERMZ","PERMR"):
                 km = {
-                    "DX":("grid","di","ft"), "DY":("grid","dj","ft"),
-                    "DZ":("grid","dk","ft"), "TOPS":("grid","tops_ref","ft"),
+                    "DX":("grid","di","ft"),    "DY":("grid","dj","ft"),
+                    "DZ":("grid","dk","ft"),    "TOPS":("grid","tops_ref","ft"),
                     "PORO":("reservoir","porosity","fraction"),
                     "PERMX":("reservoir","perm_i","md"),
                     "PERMY":("reservoir","perm_j","md"),
                     "PERMZ":("reservoir","perm_k","md"),
+                    "PERMR":("reservoir","perm_i","md"),  # 径向渗透率 → perm_i
                 }
                 sec, key, unt = km[u]
                 self._parse_simple_array(sec, key, unt, R)
-            elif u == "EQUALS": self._parse_equals(R)
-            elif u == "COPY":   self._parse_copy(R)
-
-            # ── PROPS ──
-            elif u == "PVTW":   self._parse_pvtw(R)
-            elif u == "ROCK":   self._parse_rock(R)
-            elif u == "DENSITY":self._parse_density(R)
-            elif u == "PVTO":   self._parse_pvto(R)
-            elif u == "PVDG":   self._parse_pvdg(R)
-            elif u == "SWFN":   self._parse_swfn(R)
-            elif u == "SGFN":   self._parse_sgfn(R)
-            elif u == "SOF3":   self._parse_sof3(R)
-            elif u == "SWOF":   self._parse_swof(R)
-            elif u == "SGOF":   self._parse_sgof(R)
-
-            # ── SOLUTION ──
-            elif u == "EQUIL":  self._parse_equil(R)
-            elif u == "RSVD":   self._parse_rsvd(R)
-
-            # ── SCHEDULE ──
+            elif u == "EQUALS":   self._parse_equals(R)
+            elif u == "COPY":     self._parse_copy(R)
+            elif u == "MULTIPLY": self._parse_multiply(R)
+            elif u == "PVTW":     self._parse_pvtw(R)
+            elif u == "ROCK":     self._parse_rock(R)
+            elif u == "DENSITY":  self._parse_density(R)
+            elif u == "PVTO":     self._parse_pvto(R)
+            elif u in ("PVDG","PVDO"): self._parse_pvdg(R)
+            elif u == "SWFN":     self._parse_swfn(R, lineno)
+            elif u == "SGFN":     self._parse_sgfn(R, lineno)
+            elif u == "SOF3":     self._parse_sof3(R, lineno)
+            elif u == "SWOF":     self._parse_swof(R, lineno)
+            elif u == "SGOF":     self._parse_sgof(R, lineno)
+            elif u == "EQUIL":    self._parse_equil(R)
+            elif u == "RSVD":     self._parse_rsvd(R)
             elif u == "WELSPECS": self._parse_welspecs(R)
             elif u == "COMPDAT":  self._parse_compdat(R)
             elif u == "WCONPROD": self._parse_wconprod(R)
             elif u == "WCONINJE": self._parse_wconinje(R)
+            elif u == "WELTARG":  self._parse_weltarg(R)
             elif u == "TSTEP":    current_time = self._parse_tstep(R, current_time)
             elif u == "DATES":    current_time = self._parse_dates(R, current_time)
-            elif u == "END":      break
+
+            # ── 6. 【核心】未知关键字：自动推断格式，存档备查 ───────────────
+            #
+            # 这里是"拼音规则"的实现：
+            # 不认识这个关键字，但能看懂它后面跟的是什么格式。
+            # 自动归类 + 存档，而不是静默丢弃。
+            else:
+                consumed = self._auto_consume_unknown(u, lineno, current_section, R)
+                if consumed is not None:
+                    R.setdefault("unknown_keywords", {})
+                    R["unknown_keywords"][u] = consumed
 
         R["_total_sim_time"] = current_time
         return R
