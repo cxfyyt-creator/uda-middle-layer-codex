@@ -107,7 +107,8 @@ class PetrelParser:
         return bool(re.match(r'^[A-Z][A-Z0-9_]*$', tok))
 
     def _read_until_slash(self):
-        """读取词元直到 /（含），展开 N*value，返回 token 字符串列表"""
+        """读取词元直到 /（含），展开 N*value，返回 token 字符串列表。
+        对于 N*（无后续值）形式的占位符，展开为 N 个 '1*' 占位字符串。"""
         result = []
         while self._peek():
             _, tok = self._peek()
@@ -118,12 +119,15 @@ class PetrelParser:
             if self._is_kw_tok(tok):
                 break
 
-
-
             self.pos += 1
+            # N*value 展开为数值列表
             exp = _expand_repeat(tok)
             if exp is not None:
                 result.extend([str(v) for v in exp])
+            # N* 纯占位符（如 4*）→ 展开为 N 个 '1*'
+            elif re.match(r'^\d+\*$', tok):
+                n = int(tok[:-1])
+                result.extend(['1*'] * n)
             else:
                 result.append(tok)
         return result
@@ -187,6 +191,9 @@ class PetrelParser:
           'KW'  value  [I1 I2 J1 J2 K1 K2]  /
           ...
         /   (空记录终止)
+
+        关键逻辑：同一属性可能被多次赋值（先全场赋默认值，再按层覆盖），
+        需要累积成正确的 KVAR 数组。
         """
         kw_map = {
             "DX":   ("grid","di","ft"),
@@ -223,47 +230,48 @@ class PetrelParser:
             nj  = R["grid"].get("nj", 1)
             nk  = R["grid"].get("nk", 1)
 
+            def _get_or_init_vals(section, key, nk, default=None):
+                """获取已有数组或初始化 nk 长度列表"""
+                existing = R[section].get(key)
+                if existing and existing["type"] == "array":
+                    return existing["values"][:]
+                elif existing and existing["type"] == "scalar":
+                    return [existing["value"]] * nk
+                else:
+                    return [default] * nk
+
+            def _commit(section, key, unit, src, vals_list):
+                """将 vals 列表存回 R（自动判断 CON 或 KVAR）"""
+                vals_list = [v if v is not None else 0.0 for v in vals_list]
+                if len(set(vals_list)) == 1:
+                    R[section][key] = _scalar(vals_list[0], unit, src, modifier="CON")
+                else:
+                    R[section][key] = _array(vals_list, unit, src, modifier="KVAR")
+
             if box and len(box) == 6:
                 i1,i2,j1,j2,k1,k2 = box
                 is_full_layer = (i1==1 and i2==ni and j1==1 and j2==nj)
-                if is_full_layer and k1 == k2:
-                    # 单层赋值 → 建立 KVAR 数组
-                    existing = R[section].get(key)
-                    if existing and existing["type"] == "array":
-                        vals_list = existing["values"][:]
-                    elif existing and existing["type"] == "scalar":
-                        vals_list = [existing["value"]] * nk
-                    else:
-                        vals_list = [None] * nk
-                    vals_list[k1-1] = value
-                    vals_list = [v if v is not None else 0.0 for v in vals_list]
-                    if len(set(vals_list)) == 1:
-                        R[section][key] = _scalar(vals_list[0], unit, src, modifier="CON")
-                    else:
-                        R[section][key] = _array(vals_list, unit, src, modifier="KVAR")
-                elif is_full_layer and k1 != k2:
-                    # 多层连续赋值
-                    existing = R[section].get(key)
-                    if existing and existing["type"] == "array":
-                        vals_list = existing["values"][:]
-                    elif existing and existing["type"] == "scalar":
-                        vals_list = [existing["value"]] * nk
-                    else:
-                        vals_list = [None] * nk
-                    for k in range(k1-1, k2):
-                        if k < nk:
-                            vals_list[k] = value
-                    vals_list = [v if v is not None else 0.0 for v in vals_list]
-                    if len(set(vals_list)) == 1:
-                        R[section][key] = _scalar(vals_list[0], unit, src, modifier="CON")
-                    else:
-                        R[section][key] = _array(vals_list, unit, src, modifier="KVAR")
+                if is_full_layer:
+                    # 全层（单层或多层）赋值 → 建立 / 更新 KVAR 数组
+                    vals_list = _get_or_init_vals(section, key, nk)
+                    for k in range(k1-1, min(k2, nk)):
+                        vals_list[k] = value
+                    _commit(section, key, unit, src, vals_list)
                 else:
-                    # 局部 BOX（非全层）→ CON 简化
+                    # 局部 BOX（非全层）→ 只有当该属性尚未设置时才用 CON 初始化
                     if R[section].get(key) is None:
                         R[section][key] = _scalar(value, unit, src+" BOX", modifier="CON")
+                    else:
+                        # 已有全场/全层值，局部 BOX 覆盖较复杂，简单更新对应层
+                        vals_list = _get_or_init_vals(section, key, nk)
+                        # 只更新 BOX 范围内的 k 层（近似：忽略 ij 范围）
+                        for k in range(k1-1, min(k2, nk)):
+                            vals_list[k] = value
+                        _commit(section, key, unit, src, vals_list)
             else:
-                # 无 BOX → 全场常数
+                # 无 BOX → 全场常数（但不覆盖已有的 KVAR 逐层设置）
+                # 如果已有 KVAR 数组，全场赋值会用 None 初始化，不能覆盖；
+                # 通常全场常数先出现，再被逐层覆盖，所以这里直接设标量。
                 R[section][key] = _scalar(value, unit, src, modifier="CON")
 
     def _parse_copy(self, R):
@@ -433,13 +441,18 @@ class PetrelParser:
                 R["initial"]["goc_depth"] = _scalar(vals[4], "ft", src)
 
     def _parse_rsvd(self, R):
-        # DEPTH  RS  /  ...  /
+        # SPE1 格式：8200 1.270\n 8500 1.270 /  —— 所有行共用一个末尾 /
+        # 也兼容每行有 / 的格式（_read_floats_until_slash 会忽略中间 /）
+        nums = self._read_floats_until_slash()
         rows = []
-        while self._peek():
-            nums = self._read_floats_until_slash()
-            if not nums: break
-            if len(nums) >= 2:
-                rows.append([nums[0], nums[1]])
+        i = 0
+        while i + 1 < len(nums):
+            rows.append([nums[i], nums[i+1]])
+            i += 2
+        if rows:
+            R["initial"]["rsvd_table"] = _table(["depth","rs"], rows, "SOLUTION RSVD")
+            R["initial"]["solution_gor"] = _scalar(rows[0][1], "scf/STB",
+                                                    "SOLUTION RSVD (first row)")
         if rows:
             R["initial"]["rsvd_table"] = _table(["depth","rs"], rows, "SOLUTION RSVD")
             R["initial"]["solution_gor"] = _scalar(rows[0][1], "scf/STB",
@@ -508,15 +521,34 @@ class PetrelParser:
             except ValueError:
                 continue
             status = strs[5].upper() if len(strs) > 5 else "OPEN"
-            # 井眼直径：跳过 N* 占位符，找第一个纯数字
+            # 井眼直径在 COMPDAT 第8列（0-indexed）：
+            # WELLNAME I J K1 K2 STATUS SATNUM CF DIAM ...
+            # 0        1 2 3  4  5      6      7  8
+            # SATNUM 是整数表索引，CF 通常为负（-1=计算），DIAM 是正小数
+            # 策略：取 strs[8] 若存在且为正小数；否则从 strs[6:] 找第一个正小数（非整数）
             diam = None
-            for s in strs[6:]:
-                if re.match(r'^\d+\*$', s):
-                    continue
-                try:
-                    diam = _to_float(s); break
-                except ValueError:
-                    continue
+            # 先尝试列索引8
+            if len(strs) > 8:
+                s = strs[8]
+                if s != '1*':
+                    try:
+                        v = _to_float(s)
+                        if v > 0 and v != int(v):   # 排除整数（表索引）
+                            diam = v
+                    except ValueError:
+                        pass
+            # 退而求其次：从strs[6:]找第一个正小数
+            if diam is None:
+                for s in strs[6:]:
+                    if s == '1*' or re.match(r'^\d+\*$', s):
+                        continue
+                    try:
+                        v = _to_float(s)
+                        if v > 0 and (v != int(v) or v < 1.0):
+                            diam = v
+                            break
+                    except ValueError:
+                        continue
             w = self._find_well(name, R)
             if w is None:
                 continue
