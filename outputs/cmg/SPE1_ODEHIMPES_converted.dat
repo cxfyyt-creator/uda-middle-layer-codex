@@ -41,10 +41,7 @@ RESULTS SIMULATOR IMEX
         2514.7         0.775           1.5   0.772797527         0.641        0.0208
         3014.7          0.93         1.565  0.9259259259         0.594        0.0228
         4014.7          1.27         1.695   1.233045623          0.51        0.0268
-        5014.7          1.27         1.671   1.540832049         0.549        0.0309
-        9014.7          1.27         1.579   2.590673575          0.74         0.047
         5014.7         1.618         1.827   1.540832049         0.449        0.0309
-        9014.7         1.618         1.726   2.590673575         0.605         0.047
 
 *DENSITY *OIL  49.1
 *DENSITY *GAS  0.06054
@@ -54,6 +51,8 @@ RESULTS SIMULATOR IMEX
 *REFPW  4014.7
 *VWI  0.31
 *CVW  0.0
+** *CO estimated from PVTO saturated points
+*CO  7.224959E-05
 
 ** **************************************************************************
 ** Rock-Fluid Property Section
@@ -86,6 +85,8 @@ RESULTS SIMULATOR IMEX
 ** **************************************************************************
 *INITIAL
 *VERTICAL *BLOCK_CENTER *WATER_OIL_GAS
+** *PB inferred from RSVD/PVTO
+*PB *CON  4014.7
 *REFPRES  4800
 *REFDEPTH  8400
 *DWOC  8500
