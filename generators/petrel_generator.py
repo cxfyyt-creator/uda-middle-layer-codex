@@ -1,546 +1,546 @@
 # =============================================================================
-# petrel_generator.py  —  通用 JSON dict → Petrel Eclipse .DATA
-# 支持：RUNSPEC / GRID / PROPS / SOLUTION / SCHEDULE
-# 单位系统：保留原始单位（field 或 metric），不在本文件做换算
+# generators/petrel_generator.py  —  通用 JSON → Petrel Eclipse .DATA
+# 架构：规则驱动
+#   - generators.petrel 配置决定每个 JSON 字段对应哪个关键字和格式
+#   - 新增简单字段：只需在 keyword_registry.yaml 的 generators.petrel 下添加一行
 # =============================================================================
 
 import json
+import sys
 from pathlib import Path
 from datetime import datetime
 
-# ── 工具函数 ──────────────────────────────────────────────────────────────────
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.rule_loader import get_loader
 
-def _fmt(v):
-    """数值格式化：整数用整数格式，普通小数用 g，极大/极小用科学计数"""
+# ── 格式化工具 ────────────────────────────────────────────────────────────────
+
+_MONTH_ABB = {1:"JAN",2:"FEB",3:"MAR",4:"APR",5:"MAY",6:"JUN",
+              7:"JUL",8:"AUG",9:"SEP",10:"OCT",11:"NOV",12:"DEC"}
+
+def _fmt(v, width=14):
     if isinstance(v, int):
-        return str(v)
-    if v == 0.0:
-        return "0"
-    if abs(v) >= 1e-4 and abs(v) < 1e6:
-        return f"{v:.10g}"
-    return f"{v:.6E}"
+        return str(v).rjust(width)
+    if abs(v) >= 1e5 or (abs(v) < 1e-3 and v != 0):
+        return f"{v:.6E}".rjust(width)
+    return f"{v:.6g}".rjust(width)
 
-def _vals(obj):
-    """从 JSON scalar/array 对象提取值列表"""
-    if obj["type"] == "scalar":
-        return [obj["value"]]
-    return obj["values"]
+def _get_val(obj):
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        if obj.get("type") == "scalar":
+            return obj["value"]
+        if obj.get("type") == "array":
+            return obj["values"]
+    return obj
 
-def _repeat_compress(vals):
-    """
-    把数值列表压缩为 Petrel 的 N*value 格式字符串。
-    例：[0.3, 0.3, 0.3] → '3*0.3'
-        [0.3, 0.5, 0.5] → '0.3 2*0.5'
-    """
+def _get_modifier(obj):
+    if isinstance(obj, dict):
+        return obj.get("modifier")
+    return None
+
+def _compress_array(vals):
+    """将连续相同值压缩为 N*val 格式"""
     if not vals:
         return ""
     parts = []
     i = 0
     while i < len(vals):
         v = vals[i]
-        j = i + 1
-        while j < len(vals) and vals[j] == v:
-            j += 1
-        count = j - i
-        fv = _fmt(v)
-        parts.append(f"{count}*{fv}" if count > 1 else fv)
-        i = j
-    return "  ".join(parts)
+        count = 1
+        while i + count < len(vals) and vals[i + count] == v:
+            count += 1
+        if count > 1:
+            parts.append(f"{count}*{_fmt(v).strip()}")
+        else:
+            parts.append(_fmt(v).strip())
+        i += count
+    # 每行最多 8 个值
+    chunks = []
+    chunk = []
+    for p in parts:
+        chunk.append(p)
+        if len(chunk) >= 8:
+            chunks.append("  " + "  ".join(chunk))
+            chunk = []
+    if chunk:
+        chunks.append("  " + "  ".join(chunk))
+    return "\n".join(chunks)
+
+def _write_array_petrel(lines, keyword, obj, trailing_slash=True):
+    """写 Petrel 数组：KEYWORD\n  val1 val2 ... /"""
+    if obj is None:
+        return
+    val = _get_val(obj)
+    if val is None:
+        return
+    lines.append(keyword)
+    if isinstance(val, list):
+        body = _compress_array(val)
+        if trailing_slash:
+            lines.append(body + "  /")
+        else:
+            lines.append(body)
+    else:
+        if trailing_slash:
+            lines.append(f"  {_fmt(val).strip()} /")
+        else:
+            lines.append(f"  {_fmt(val).strip()}")
+
+def _write_table_slash(lines, keyword, tbl, columns=None):
+    """写 Petrel 表格：KEYWORD\n  v1 v2 v3 /\n  v1 v2 v3 /\n/"""
+    if not tbl or not tbl.get("rows"):
+        return
+    cols = columns or tbl.get("columns", [])
+    lines.append(keyword)
+    if cols:
+        lines.append("-- " + "  ".join(f"{c:>10}" for c in cols))
+    for row in tbl["rows"]:
+        lines.append("  " + "  ".join(_fmt(v) for v in row) + "  /")
+    lines.append("/")
+
 
 # ── 主生成器 ──────────────────────────────────────────────────────────────────
 
 class PetrelGenerator:
-    def __init__(self, data):
-        self.d = data
-        self.lines = []
 
-    def _w(self, line=""):
-        self.lines.append(line)
+    def __init__(self):
+        self._rl = get_loader()
+        self._gen_cfg = self._rl.petrel_gen_config()
 
-    def _comment(self, text):
-        self._w(f"-- {text}")
+    def generate(self, data):
+        lines = []
+        meta      = data.get("meta", {})
+        grid      = data.get("grid", {})
+        reservoir = data.get("reservoir", {})
+        fluid     = data.get("fluid", {})
+        rockfluid = data.get("rockfluid", {})
+        initial   = data.get("initial", {})
+        numerical = data.get("numerical", {})
+        wells     = data.get("wells", [])
 
-    def _section(self, name, desc=""):
-        self._w()
-        self._w(f"{name}  {'='*max(1,72-len(name))}")
-        if desc:
-            self._comment(desc)
-        self._w()
+        lines += [
+            f"-- Generated by UDA Middle Layer",
+            f"-- Source: {meta.get('source_file', 'unknown')}",
+            f"-- Date:   {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "",
+        ]
 
-    def _write_array(self, kw, obj):
-        """
-        生成 Petrel 数组关键字：
-          KW
-            N*val  val  ... /
-        """
-        vals = _vals(obj)
-        self._w(kw)
-        compressed = _repeat_compress(vals)
-        self._w(f"  {compressed} /")
-        self._w()
+        self._write_runspec(lines, meta, grid, wells)
+        self._write_grid_section(lines, grid, reservoir)
+        self._write_props(lines, fluid, rockfluid)
+        self._write_solution(lines, initial)
+        self._write_summary(lines)
+        self._write_schedule(lines, wells, meta)
+        lines.append("END")
+        return "\n".join(lines) + "\n"
 
-    # ── RUNSPEC ──────────────────────────────────────────────────────────────
+    # ── RUNSPEC ───────────────────────────────────────────────────────────────
 
-    def _gen_runspec(self):
-        self._w("------------------------------------------------------------------------")
-        src = self.d["meta"].get("source_file","unknown")
-        ts  = self.d["meta"].get("conversion_timestamp","")[:10]
-        self._comment(f"Generated by petrel_generator.py from: {src}  ({ts})")
-        self._comment("Universal Data Adapter (UDA) Middle Layer")
-        self._w("------------------------------------------------------------------------")
-        self._w()
-
-        self._w("RUNSPEC")
-        self._w()
-
-        # 单位制
-        us = self.d["meta"].get("unit_system","field").upper()
-        self._w(us)
-        self._w()
-
-        # 网格维度
-        g = self.d.get("grid", {})
-        ni = g.get("ni", 1)
-        nj = g.get("nj", 1)
-        nk = g.get("nk", 1)
-        self._comment("Grid dimensions: NI NJ NK")
-        self._w("DIMENS")
-        self._w(f"   {ni}   {nj}    {nk}  /")
-        self._w()
-
-        # 流体系统声明
-        self._w("OIL")
-        self._w()
-        self._w("WATER")
-        self._w()
-        self._w("GAS")
-        self._w()
-        self._w("DISGAS")
-        self._w()
-
-        # 起始日期
-        start = self.d["meta"].get("start_date")
+    def _write_runspec(self, lines, meta, grid, wells):
+        lines += ["RUNSPEC", ""]
+        start = meta.get("start_date", "")
         if start:
-            # start_date 格式为 YYYY-MM-DD
-            try:
-                yr, mo, dy = start.split("-")
-                month_names = ["","JAN","FEB","MAR","APR","MAY","JUN",
-                               "JUL","AUG","SEP","OCT","NOV","DEC"]
-                mon_str = month_names[int(mo)]
-                self._comment("Simulation start date")
-                self._w("START")
-                self._w(f"  {int(dy)} '{mon_str}' {yr}  /")
-                self._w()
-            except (ValueError, IndexError):
-                pass
+            parts = start.split("-")
+            if len(parts) == 3:
+                mon_str = _MONTH_ABB.get(int(parts[1]), "JAN")
+                lines.append(f"START")
+                lines.append(f"  {int(parts[2])} '{mon_str}' {parts[0]} /")
+                lines.append("")
 
-        # 井表维度（简单默认值）
-        wells = self.d.get("wells", [])
-        nwells = max(len(wells), 2)
-        self._comment("Well dimensions: NWELLS NCONN NGRPS NWLISTS")
-        self._w("WELLDIMS")
-        self._w(f"    {nwells}    10    1    {nwells} /")
-        self._w()
+        ni = grid.get("ni", 1)
+        nj = grid.get("nj", 1)
+        nk = grid.get("nk", 1)
+        lines += [
+            f"DIMENS",
+            f"  {ni}  {nj}  {nk} /",
+            "",
+            "OIL", "WATER", "GAS", "DISGAS",
+            "",
+        ]
+        unit = meta.get("unit_system", "field").upper()
+        lines += [unit, ""]
+
+        # 井维度
+        nwells = max(len(wells), 1)
+        nconns = sum(len(w.get("perforations", [])) for w in wells) or nk
+        lines += [
+            "WELLDIMS",
+            f"  {nwells}  {nconns}  1  {nwells} /",
+            "",
+            "TABDIMS",
+            "  1 /",
+            "",
+        ]
 
     # ── GRID ─────────────────────────────────────────────────────────────────
 
-    def _gen_grid(self):
-        g = self.d.get("grid", {})
-        r = self.d.get("reservoir", {})
-        if not g and not r:
-            return
+    def _write_grid_section(self, lines, grid, reservoir):
+        lines += ["GRID", ""]
 
-        self._section("GRID", "Grid geometry and rock properties")
+        gt = grid.get("grid_type", "CART").upper()
+        if gt == "RADIAL":
+            lines.append("RADIAL")
+            lines.append("")
+            inrad = _get_val(grid.get("inrad"))
+            if inrad is not None:
+                lines.append(f"INRAD")
+                lines.append(f"  {_fmt(inrad).strip()} /")
+                lines.append("")
+            # DRV → DX, DTHETA → DY, DK → DZ
+            drv_obj = grid.get("di") or grid.get("drv")
+            if drv_obj:
+                _write_array_petrel(lines, "DRV", drv_obj)
+                lines.append("")
+            dtheta_obj = grid.get("dj") or grid.get("dtheta")
+            if dtheta_obj:
+                _write_array_petrel(lines, "DTHETA", dtheta_obj)
+                lines.append("")
+        else:
+            for key, kw in [("di", "DX"), ("dj", "DY"), ("dk", "DZ")]:
+                obj = grid.get(key)
+                if obj:
+                    _write_array_petrel(lines, kw, obj)
+                    lines.append("")
 
-        # DX / DY / DZ
-        for key, kw, desc in [
-            ("di","DX","X-direction cell sizes (ft)"),
-            ("dj","DY","Y-direction cell sizes (ft)"),
-            ("dk","DZ","Z-direction cell thicknesses (ft)"),
-        ]:
-            obj = g.get(key)
+        # TOPS
+        tops_obj = grid.get("tops_ref")
+        depth_block = grid.get("depth_ref_block")
+        if tops_obj:
+            _write_array_petrel(lines, "TOPS", tops_obj)
+            lines.append("")
+        elif depth_block and isinstance(depth_block, dict):
+            ni = grid.get("ni", 1)
+            nj = grid.get("nj", 1)
+            nk = grid.get("nk", 1)
+            v = depth_block.get("value", 0)
+            lines.append("TOPS")
+            lines.append(f"  {ni*nj}*{_fmt(v).strip()} /")
+            lines.append("")
+
+        # 储层属性（GRID 段）
+        cfg_grid_res = {
+            "porosity": "PORO",
+            "perm_i":   "PERMX",
+            "perm_j":   "PERMY",
+            "perm_k":   "PERMZ",
+            "ntg":      "NTG",
+        }
+        for key, kw in cfg_grid_res.items():
+            obj = reservoir.get(key)
             if obj:
-                self._comment(desc)
-                self._write_array(kw, obj)
+                _write_array_petrel(lines, kw, obj)
+                lines.append("")
 
-        # TOPS（顶深）
-        tops = g.get("tops_ref") or g.get("depth_ref_block")
-        if tops:
-            if isinstance(tops, dict) and tops.get("type") == "scalar":
-                self._comment("Top depths (ft)")
-                self._w("TOPS")
-                self._w(f"  {_fmt(tops['value'])} /")
-                self._w()
+    # ── PROPS ─────────────────────────────────────────────────────────────────
 
-        # 岩石属性
-        for key, kw, desc in [
-            ("porosity","PORO","Porosity (fraction)"),
-            ("perm_i","PERMX","X-direction permeability (md)"),
-            ("perm_j","PERMY","Y-direction permeability (md)"),
-            ("perm_k","PERMZ","Z-direction permeability (md)"),
-        ]:
-            obj = r.get(key)
-            if obj:
-                self._comment(desc)
-                self._write_array(kw, obj)
-
-    # ── PROPS ────────────────────────────────────────────────────────────────
-
-    def _gen_props(self):
-        f  = self.d.get("fluid", {})
-        rf = self.d.get("rockfluid", {})
-        r  = self.d.get("reservoir", {})
-        if not f and not rf:
-            return
-
-        self._section("PROPS", "Fluid and rock-fluid properties")
-
-        # ROCK
-        rock_pres = r.get("rock_ref_pressure")
-        rock_comp = r.get("rock_compressibility")
-        if rock_pres and rock_comp:
-            self._comment("Rock compressibility: REF_PRES  COMPRESSIBILITY")
-            self._w("ROCK")
-            self._w(f"   {_fmt(rock_pres['value'])}   {_fmt(rock_comp['value'])}  /")
-            self._w()
-
-        # DENSITY
-        oil_den  = f.get("oil_density")
-        wat_den  = f.get("water_density")
-        gas_den  = f.get("gas_density")
-        if oil_den or wat_den or gas_den:
-            self._comment("Surface densities: OIL  WATER  GAS  (lb/ft3 or kg/m3)")
-            self._w("DENSITY")
-            od = _fmt(oil_den["value"]) if oil_den else "0"
-            wd = _fmt(wat_den["value"]) if wat_den else "0"
-            gd = _fmt(gas_den["value"]) if gas_den else "0"
-            self._w(f"   {od}   {wd}   {gd}  /")
-            self._w()
+    def _write_props(self, lines, fluid, rockfluid):
+        lines += ["PROPS", ""]
 
         # PVTW
-        wref = f.get("water_ref_pressure")
-        wfvf = f.get("water_fvf")
-        wcw  = f.get("water_compressibility")
-        wvis = f.get("water_viscosity")
-        wcvw = f.get("water_viscosity_coeff")
-        if wref and wfvf and wcw and wvis:
-            self._comment("Water PVT: REF_PRES  BWI  CW  VWI  CVW")
-            self._w("PVTW")
-            line = f"   {_fmt(wref['value'])}   {_fmt(wfvf['value'])}   {_fmt(wcw['value'])}   {_fmt(wvis['value'])}"
-            if wcvw:
-                line += f"   {_fmt(wcvw['value'])}"
-            else:
-                line += "   0"
-            line += "  /"
-            self._w(line)
-            self._w()
+        pvtw_fields = [
+            fluid.get("water_ref_pressure"),
+            fluid.get("water_fvf"),
+            fluid.get("water_compressibility"),
+            fluid.get("water_viscosity"),
+            fluid.get("water_viscosity_coeff"),
+        ]
+        pvtw_vals = [_get_val(f) for f in pvtw_fields]
+        if any(v is not None for v in pvtw_vals):
+            lines.append("PVTW")
+            row = "  " + "  ".join(
+                _fmt(v).strip() if v is not None else "1*"
+                for v in pvtw_vals
+            ) + " /"
+            lines.append(row)
+            lines.append("")
 
-        # PVTO（活油）
-        pvto = f.get("pvto_table")
-        if pvto:
-            self._comment("Live oil PVT: RS  PSAT  BO  VISO (per RS group, / terminates group)")
-            self._comment("-- RS      PRES    BO    VISO")
-            self._w("PVTO")
-            rows = pvto["rows"]
-            i = 0
-            while i < len(rows):
-                rs = rows[i][0]
-                # 找连续相同 RS 的行（同一 RS 组）
-                j = i
-                while j < len(rows) and rows[j][0] == rs:
-                    j += 1
-                group = rows[i:j]
-                # 第一行（饱和点）：带 RS
-                first = group[0]
-                if len(group) == 1:
-                    self._w(f"   {_fmt(first[0])}   {_fmt(first[1])}   {_fmt(first[2])}   {_fmt(first[3])}  /")
-                else:
-                    # 饱和点行（不带 /）
-                    self._w(f"   {_fmt(first[0])}   {_fmt(first[1])}   {_fmt(first[2])}   {_fmt(first[3])}")
-                    # 欠饱和行（带空格对齐）
-                    for k, row in enumerate(group[1:]):
-                        suffix = "  /" if k == len(group)-2 else ""
-                        self._w(f"           {_fmt(row[1])}   {_fmt(row[2])}   {_fmt(row[3])}{suffix}")
-                i = j
-            self._w("/")
-            self._w()
+        # DENSITY
+        od = _get_val(fluid.get("oil_density"))
+        wd = _get_val(fluid.get("water_density"))
+        gd = _get_val(fluid.get("gas_density"))
+        if any(v is not None for v in [od, wd, gd]):
+            lines.append("DENSITY")
+            row = "  " + "  ".join(
+                _fmt(v).strip() if v is not None else "1*"
+                for v in [od, wd, gd]
+            ) + " /"
+            lines.append(row)
+            lines.append("")
 
-        # CMG 来源文件的黑油 PVT（6列：p/rs/bo/eg/viso/visg）→ 转换为 PVTO + PVDG
-        cmg_pvt = f.get("pvt_table")
-        if cmg_pvt and not pvto:
-            self._comment("Oil PVT (from CMG IMEX 6-column table, converted to PVTO format)")
-            self._comment("-- RS      PRES    BO    VISO")
-            self._w("PVTO")
-            for row in cmg_pvt["rows"]:
-                # CMG 列：p, rs, bo, eg, viso, visg
-                # PVTO 格式：rs  p  bo  viso
-                if len(row) >= 5:
-                    rs   = row[1]
-                    pres = row[0]
-                    bo   = row[2]
-                    viso = row[4]
-                    self._w(f"   {_fmt(rs)}   {_fmt(pres)}   {_fmt(bo)}   {_fmt(viso)}  /")
-            self._w("/")
-            self._w()
+        # ROCK
+        rp = _get_val(fluid.get("rock_ref_pressure") or
+                      fluid.get("reservoir", {}).get("rock_ref_pressure"))
+        rc = _get_val(fluid.get("rock_compressibility") or
+                      fluid.get("reservoir", {}).get("rock_compressibility"))
+        # rock 也可能在 reservoir 节点，兼容两种来源
+        if rp is None:
+            # 尝试从外层 data["reservoir"] 拿（generator 调用时已拆分）
+            pass
+        if rp is not None and rc is not None:
+            lines.append("ROCK")
+            lines.append(f"  {_fmt(rp).strip()}  {_fmt(rc).strip()} /")
+            lines.append("")
 
-            # PVDG（从 CMG 6列的 eg/visg 提取）
-            self._comment("Dry gas PVT (from CMG table): PGAS  BG  VISGAS")
-            self._w("PVDG")
-            for row in cmg_pvt["rows"]:
-                if len(row) >= 6:
-                    pres = row[0]
-                    eg   = row[3]
-                    visg = row[5]
-                    self._w(f"   {_fmt(pres)}   {_fmt(eg)}   {_fmt(visg)}")
-            self._w("/")
-            self._w()
+        # PVTO
+        pvto = fluid.get("pvto_table")
+        if not pvto and fluid.get("pvt_table"):
+            # CMG来源的 pvt_table → 拆分回 PVTO/PVDG
+            pvto, pvdg = self._split_pvt_to_pvto_pvdg(fluid["pvt_table"])
+            if pvto:
+                _write_table_slash(lines, "PVTO", pvto, ["rs", "p", "bo", "viso"])
+                lines.append("")
+            if pvdg:
+                _write_table_slash(lines, "PVDG", pvdg, ["p", "bg", "visg"])
+                lines.append("")
+        else:
+            if pvto:
+                _write_table_slash(lines, "PVTO", pvto, ["rs", "p", "bo", "viso"])
+                lines.append("")
+            pvdg = fluid.get("pvdg_table")
+            if pvdg:
+                _write_table_slash(lines, "PVDG", pvdg, ["p", "bg", "visg"])
+                lines.append("")
 
-        # PVDG（直接来自 Petrel 文件）
-        pvdg = f.get("pvdg_table")
-        if pvdg:
-            self._comment("Dry gas PVT: PGAS  BG  VISGAS")
-            self._w("PVDG")
-            for row in pvdg["rows"]:
-                self._w(f"   {_fmt(row[0])}   {_fmt(row[1])}   {_fmt(row[2])}")
-            self._w("/")
-            self._w()
+        # 相渗表：按优先级写，保留原始格式
+        self._write_rockfluid(lines, rockfluid)
 
-        # ── 相渗表 ──
+    def _split_pvt_to_pvto_pvdg(self, pvt6):
+        """
+        CMG 6列 pvt_table (p,rs,bo,eg,viso,visg) → PVTO + PVDG
+        """
+        rows6 = pvt6["rows"]  # [p, rs, bo, eg, viso, visg]
+        pvto_rows = [[r[1], r[0], r[2], r[4]] for r in rows6]  # rs,p,bo,viso
+        pvdg_rows = [[r[0], 1.0/r[3] if r[3] > 0 else 0.0, r[5]] for r in rows6]  # p,bg,visg
+        pvto = {"type": "table", "columns": ["rs","p","bo","viso"],
+                "rows": pvto_rows, "confidence": 0.9, "source": "split from pvt_table"}
+        pvdg = {"type": "table", "columns": ["p","bg","visg"],
+                "rows": pvdg_rows, "confidence": 0.9, "source": "split from pvt_table"}
+        return pvto, pvdg
 
-        # SWOF（来自 CMG *SWT 或 Petrel SWOF）
-        swt = rf.get("swt_table")
-        if swt:
-            cols = swt["columns"]
-            if "krow" in cols:
-                self._comment("Water-oil relative permeability: Sw  KRW  KROW  PCOW")
-                self._w("SWOF")
-                for row in swt["rows"]:
-                    pcow = _fmt(row[3]) if len(row) >= 4 else "0"
-                    self._w(f"   {_fmt(row[0])}   {_fmt(row[1])}   {_fmt(row[2])}   {pcow}")
-                self._w("/")
-                self._w()
+    def _write_rockfluid(self, lines, rockfluid):
+        """按优先级写相渗表，保留原始三表或两表格式"""
+        cfg = self._gen_cfg.get("rockfluid", {})
 
-        # SGOF（来自 CMG *SLT 或 Petrel SGOF）
-        slt = rf.get("slt_table")
-        if slt:
-            cols = slt["columns"]
-            self._comment("Gas-oil relative permeability: Sg  KRG  KROG  PCOG")
-            self._w("SGOF")
-            for row in slt["rows"]:
-                pcog = _fmt(row[3]) if len(row) >= 4 else "0"
-                col3 = _fmt(row[2]) if len(row) >= 3 else "0"
-                self._w(f"   {_fmt(row[0])}   {_fmt(row[1])}   {col3}   {pcog}")
-            self._w("/")
-            self._w()
+        # 优先级：已有的原始表 > 需要转换的表
+        wrote = False
+        for key, field_cfg in cfg.items():
+            tbl = rockfluid.get(key)
+            if not tbl or not tbl.get("rows"):
+                continue
+            kw = field_cfg.get("keyword")
+            cols = field_cfg.get("columns")
+            if kw and cols:
+                _write_table_slash(lines, kw, tbl, cols)
+                lines.append("")
+                wrote = True
 
-        # SWFN（三函数相渗，Petrel SWFN/SGFN/SOF3 体系）
-        swfn = rf.get("swfn_table")
-        sgfn = rf.get("sgfn_table")
-        sof3 = rf.get("sof3_table")
+        if not wrote:
+            # 没有相渗表，写一个占位注释
+            lines.append("-- ** WARNING: No rock-fluid tables found in JSON **")
 
-        if swfn:
-            self._comment("Water relative permeability: Sw  KRW  PCOW")
-            self._w("SWFN")
-            for row in swfn["rows"]:
-                pcow = _fmt(row[2]) if len(row) >= 3 else "0"
-                self._w(f"   {_fmt(row[0])}   {_fmt(row[1])}   {pcow}")
-            self._w("/")
-            self._w()
+    # ── SOLUTION ──────────────────────────────────────────────────────────────
 
-        if sgfn:
-            self._comment("Gas relative permeability: Sg  KRG  PCOG")
-            self._w("SGFN")
-            for row in sgfn["rows"]:
-                pcog = _fmt(row[2]) if len(row) >= 3 else "0"
-                self._w(f"   {_fmt(row[0])}   {_fmt(row[1])}   {pcog}")
-            self._w("/")
-            self._w()
-
-        if sof3:
-            self._comment("Oil relative permeability: So  KROW  KROG")
-            self._w("SOF3")
-            for row in sof3["rows"]:
-                krog = _fmt(row[2]) if len(row) >= 3 else "0"
-                self._w(f"   {_fmt(row[0])}   {_fmt(row[1])}   {krog}")
-            self._w("/")
-            self._w()
-
-    # ── SOLUTION ─────────────────────────────────────────────────────────────
-
-    def _gen_solution(self):
-        ini = self.d.get("initial", {})
-        if not ini:
-            return
-
-        self._section("SOLUTION", "Initial conditions")
-
-        ref_depth = ini.get("ref_depth")
-        ref_pres  = ini.get("ref_pressure")
-        woc       = ini.get("woc_depth")
-        goc       = ini.get("goc_depth")
-
-        if ref_depth and ref_pres:
-            self._comment("Equilibration data:")
-            self._comment("  DATUM_DEPTH  DATUM_PRES  OWC_DEPTH  PCWOC  GOC_DEPTH  PCGOC  RSVD  RVVD  SOLN")
-            self._w("EQUIL")
-            woc_v = _fmt(woc["value"]) if woc else _fmt(ref_depth["value"] + 500)
-            goc_v = _fmt(goc["value"]) if goc else _fmt(ref_depth["value"] - 500)
-            self._w(f"   {_fmt(ref_depth['value'])}   {_fmt(ref_pres['value'])}"
-                    f"   {woc_v}   0   {goc_v}   0   1   0   0  /")
-            self._w()
-
-        # RSVD 初始溶解气油比
-        rsvd = ini.get("rsvd_table")
-        if rsvd:
-            self._comment("Initial RS vs depth: DEPTH  RS")
-            self._w("RSVD")
+    def _write_solution(self, lines, initial):
+        lines += ["SOLUTION", ""]
+        # EQUIL
+        ref_depth = _get_val(initial.get("ref_depth"))
+        ref_pres  = _get_val(initial.get("ref_pressure"))
+        woc       = _get_val(initial.get("woc_depth"))
+        goc       = _get_val(initial.get("goc_depth"))
+        if ref_depth is not None and ref_pres is not None:
+            woc_str = _fmt(woc).strip() if woc is not None else "0"
+            goc_str = _fmt(goc).strip() if goc is not None else "0"
+            lines.append("EQUIL")
+            lines.append(f"  {_fmt(ref_depth).strip()}  {_fmt(ref_pres).strip()}  "
+                         f"{woc_str}  0  {goc_str}  0 /")
+            lines.append("")
+        # RSVD
+        rsvd = initial.get("rsvd_table")
+        if rsvd and rsvd.get("rows"):
+            lines.append("RSVD")
             for row in rsvd["rows"]:
-                self._w(f"   {_fmt(row[0])}   {_fmt(row[1])}")
-            self._w("/")
-            self._w()
+                lines.append("  " + "  ".join(_fmt(v) for v in row))
+            lines.append("/")
+            lines.append("")
+        # PBVD
+        pbvd = initial.get("pbvd_table")
+        if pbvd and pbvd.get("rows"):
+            lines.append("PBVD")
+            for row in pbvd["rows"]:
+                lines.append("  " + "  ".join(_fmt(v) for v in row))
+            lines.append("/")
+            lines.append("")
 
-    # ── SCHEDULE ─────────────────────────────────────────────────────────────
+    # ── SUMMARY ───────────────────────────────────────────────────────────────
 
-    def _gen_schedule(self):
-        wells = self.d.get("wells", [])
-        if not wells:
-            return
+    def _write_summary(self, lines):
+        lines += [
+            "SUMMARY",
+            "",
+            "ALL",
+            "WBHP",
+            "WGOR",
+            "",
+        ]
 
-        self._section("SCHEDULE", "Well operations and time stepping")
+    # ── SCHEDULE ──────────────────────────────────────────────────────────────
 
-        # 区分生产井和注入井
-        producers = [w for w in wells if w.get("well_type") == "PRODUCER"]
-        injectors = [w for w in wells if w.get("well_type") == "INJECTOR"]
+    def _write_schedule(self, lines, wells, meta):
+        lines += ["SCHEDULE", ""]
 
         # WELSPECS
-        self._comment("Well specification data:")
-        self._comment("  WELL_NAME  GROUP  I  J  REF_DEPTH  PHASE")
-        self._w("WELSPECS")
-        ref_depth = self.d.get("initial", {}).get("ref_depth", {})
-        rdv = _fmt(ref_depth.get("value", 0)) if ref_depth else "1*"
-        for w in wells:
-            name  = w.get("well_name", "WELL")
-            group = w.get("well_group", "FIELD")
-            wi    = w.get("well_i", 1)
-            wj    = w.get("well_j", 1)
-            phase = w.get("phase", "OIL")
-            # 如果原始文件没存 well_i/j，从射孔推断
-            perfs = w.get("perforations", [])
-            if perfs and wi == 1:
-                wi = perfs[0]["i"]
-                wj = perfs[0]["j"]
-            if not phase or phase == "None":
-                phase = "GAS" if w.get("well_type") == "INJECTOR" else "OIL"
-            self._w(f"    '{name}'  '{group}'   {wi}  {wj}   {rdv}  '{phase}'  /")
-        self._w("/")
-        self._w()
+        if wells:
+            lines.append("WELSPECS")
+            lines.append("-- Name   Group  I   J   RefDepth  Phase")
+            for w in wells:
+                name  = w.get("well_name", "W1")
+                group = w.get("well_group", "FIELD")
+                ci    = w.get("well_i", 1)
+                cj    = w.get("well_j", 1)
+                phase = w.get("phase", "OIL").upper()
+                if w.get("well_type", "").upper() == "INJECTOR":
+                    phase = w.get("inj_fluid", "GAS") or "GAS"
+                lines.append(f"  '{name}'  '{group}'  {ci}  {cj}  1*  {phase} /")
+            lines.append("/")
+            lines.append("")
 
         # COMPDAT
-        self._comment("Completion specification data:")
-        self._comment("  WELL_NAME  I  J  K1  K2  OPEN/SHUT  SAT  CF  DIAM")
-        self._w("COMPDAT")
-        for w in wells:
-            name   = w.get("well_name","WELL")
-            radius = w.get("well_radius")
-            diam   = _fmt(radius * 2) if radius else "0.5"
-            for p in w.get("perforations", []):
-                status = p.get("status","OPEN").upper()
-                self._w(f"    '{name}'  {p['i']}  {p['j']}  {p['k']}  {p['k']}"
-                        f"  '{status}'  1*  1*  {diam}  /")
-        self._w("/")
-        self._w()
+        if wells:
+            lines.append("COMPDAT")
+            lines.append("-- Name  I  J  K1 K2  Status  Sat  Trans  Diam")
+            for w in wells:
+                name   = w.get("well_name", "W1")
+                radius = w.get("well_radius")
+                diam   = (radius * 2.0) if radius else 0.1524
+                for p in w.get("perforations", []):
+                    status = p.get("status", "OPEN")
+                    lines.append(f"  '{name}'  {p['i']}  {p['j']}  {p['k']}  {p['k']}"
+                                 f"  {status}  1*  1*  {diam:.4f} /")
+            lines.append("/")
+            lines.append("")
 
-        # WCONPROD
-        if producers:
-            self._comment("Production well controls:")
-            self._comment("  WELL_NAME  OPEN/SHUT  MODE  OIL_RATE  WATER_RATE  GAS_RATE  LIQU  RES  BHP")
-            self._w("WCONPROD")
-            for w in producers:
-                name     = w.get("well_name","WELL")
-                oil_rate = w.get("rate_max")
-                bhp      = w.get("bhp_min")
-                oil_str  = _fmt(oil_rate) if oil_rate is not None else "1*"
-                bhp_str  = _fmt(bhp) if bhp is not None else "1*"
-                self._w(f"    '{name}'  'OPEN'  'ORAT'  {oil_str}  4*  {bhp_str}  /")
-            self._w("/")
-            self._w()
+        # WCONINJE / WCONPROD
+        inj_wells  = [w for w in wells if w.get("well_type","").upper() == "INJECTOR"]
+        prod_wells = [w for w in wells if w.get("well_type","").upper() != "INJECTOR"]
 
-        # WCONINJE
-        if injectors:
-            self._comment("Injection well controls:")
-            self._comment("  WELL_NAME  INJ_TYPE  OPEN/SHUT  MODE  RATE  RESV  BHP")
-            self._w("WCONINJE")
-            for w in injectors:
-                name     = w.get("well_name","WELL")
-                inj_type = w.get("inj_fluid") or w.get("phase","GAS")
-                if not inj_type or inj_type == "None":
-                    inj_type = "GAS"
+        if inj_wells:
+            lines.append("WCONINJE")
+            lines.append("-- Name  Type  Status  Mode  Rate  Resv  BHP")
+            for w in inj_wells:
+                name     = w.get("well_name","W1")
+                inj_type = (w.get("inj_fluid") or "GAS").upper()
                 rate     = w.get("rate_max")
                 bhp      = w.get("bhp_max")
-                rate_str = _fmt(rate) if rate is not None else "1*"
-                bhp_str  = _fmt(bhp) if bhp is not None else "1*"
-                self._w(f"    '{name}'  '{inj_type}'  'OPEN'  'RATE'  {rate_str}  1*  {bhp_str}  /")
-            self._w("/")
-            self._w()
+                rate_str = _fmt(rate).strip() if rate else "1*"
+                bhp_str  = _fmt(bhp).strip() if bhp else "1*"
+                lines.append(f"  '{name}'  {inj_type}  OPEN  RATE  {rate_str}  1*  {bhp_str} /")
+            lines.append("/")
+            lines.append("")
 
-        # TSTEP（来自 CMG 的时间步）
-        total_time = self.d.get("_total_sim_time")
-        if not total_time:
-            # 从 wells 的 alter_schedule 推断最大时间
-            max_t = 0.0
-            for w in wells:
-                for a in w.get("alter_schedule", []):
-                    max_t = max(max_t, a.get("time", 0.0))
-            total_time = max_t if max_t > 0 else 3650.0
+        if prod_wells:
+            lines.append("WCONPROD")
+            lines.append("-- Name  Status  Mode  Oil  Water  Gas  Liq  Resv  BHP")
+            for w in prod_wells:
+                name    = w.get("well_name","W1")
+                rate    = w.get("rate_max")
+                bhp     = w.get("bhp_min")
+                rate_str = _fmt(rate).strip() if rate else "1*"
+                bhp_str  = _fmt(bhp).strip() if bhp else "1*"
+                lines.append(f"  '{name}'  OPEN  ORAT  {rate_str}  1*  1*  1*  1*  {bhp_str} /")
+            lines.append("/")
+            lines.append("")
 
-        self._comment(f"Time stepping: total {_fmt(total_time)} days")
-        self._w("TSTEP")
-        # 简单切分：最多100天步长
-        remaining = float(total_time)
-        step = min(100.0, remaining)
-        steps = []
-        while remaining > 1e-6:
-            s = min(step, remaining)
-            steps.append(s)
-            remaining -= s
-        # 压缩连续相同步长
-        self._w("  " + _repeat_compress(steps))
-        self._w("/")
-        self._w()
+        # TSTEP / WELTARG
+        self._write_dynamic(lines, wells, meta)
 
-        self._w("END  ================================================================")
+    def _write_dynamic(self, lines, wells, meta):
+        """将 alter_schedule 转为 TSTEP + WELTARG 块"""
+        events = []
+        for w in wells:
+            for ev in w.get("alter_schedule", []):
+                t = ev.get("time", 0.0)
+                events.append((t, w, ev))
+        if not events:
+            total = meta.get("_total_sim_time", 0.0)
+            if total and total > 0:
+                lines.append(f"TSTEP")
+                lines.append(f"  {total:.1f} /")
+                lines.append("")
+            return
 
-    # ── 主入口 ───────────────────────────────────────────────────────────────
+        events.sort(key=lambda e: e[0])
+        prev_time = 0.0
+        from itertools import groupby
 
-    def generate(self):
-        self._gen_runspec()
-        self._gen_grid()
-        self._gen_props()
-        self._gen_solution()
-        self._gen_schedule()
-        return "\n".join(self.lines)
+        for t, group in groupby(events, key=lambda e: e[0]):
+            group = list(group)
+            dt = t - prev_time
+            if dt > 0:
+                lines.append(f"TSTEP")
+                lines.append(f"  {dt:.2f} /")
+                lines.append("")
+            # WELTARG
+            for _, w, ev in group:
+                name   = w.get("well_name","W1")
+                if "target" in ev:
+                    target = ev.get("target","ORATE")
+                    val    = ev.get("value", 0.0)
+                else:
+                    target = "ORATE"
+                    val    = ev.get("rate", 0.0)
+                lines.append("WELTARG")
+                lines.append(f"  '{name}'  {target}  {_fmt(val).strip()} /")
+                lines.append("/")
+                lines.append("")
+            prev_time = t
+
+        # 结尾步长
+        total = meta.get("_total_sim_time", prev_time)
+        if total > prev_time:
+            lines.append(f"TSTEP")
+            lines.append(f"  {total - prev_time:.2f} /")
+            lines.append("")
 
 
-def generate_petrel(data, output_path):
-    text = PetrelGenerator(data).generate()
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(text)
-    return text
+# ── 对外接口 ──────────────────────────────────────────────────────────────────
+
+def generate_petrel(data_or_json, output_file=None):
+    if isinstance(data_or_json, (str, Path)):
+        with open(data_or_json, encoding="utf-8") as f:
+            data = json.load(f)
+    else:
+        data = data_or_json
+
+    # ROCK 数据在 reservoir 节点，给 generator 合并进 fluid 便于写 PROPS
+    data = dict(data)
+    res = data.get("reservoir", {})
+    fl  = dict(data.get("fluid", {}))
+    if not fl.get("rock_ref_pressure") and res.get("rock_ref_pressure"):
+        fl["rock_ref_pressure"] = res["rock_ref_pressure"]
+    if not fl.get("rock_compressibility") and res.get("rock_compressibility"):
+        fl["rock_compressibility"] = res["rock_compressibility"]
+    data["fluid"] = fl
+
+    content = PetrelGenerator().generate(data)
+
+    if output_file:
+        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(content)
+
+    return content
 
 
 if __name__ == "__main__":
-    import sys
-
     default_json = Path("outputs/json/mxspe001_parsed.json")
-    json_file = Path(sys.argv[1]) if len(sys.argv) > 1 else default_json
+    src = Path(sys.argv[1]) if len(sys.argv) > 1 else default_json
 
     out_dir = Path("outputs/petrel")
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / f"{json_file.stem.replace('_parsed','')}_converted.DATA"
+    stem = Path(src).stem.replace("_parsed", "")
+    out = out_dir / f"{stem}_converted.DATA"
 
-    with open(json_file, encoding="utf-8") as f:
-        data = json.load(f)
-
-    generate_petrel(data, out_file)
-    print(f"Generated: {out_file}")
+    generate_petrel(src, str(out))
+    print(f"Petrel file written: {out}")

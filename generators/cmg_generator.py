@@ -1,434 +1,659 @@
 # =============================================================================
-# cmg_generator.py  —  通用JSON dict → CMG IMEX .dat
-# v2：保留modifier、4列相渗、PERFV、DATE/ALTER/TIME
+# generators/cmg_generator.py  —  通用 JSON → CMG IMEX .dat
+# 架构：规则驱动
+#   - generators.cmg 配置决定每个 JSON 字段对应哪个关键字和格式
+#   - 新增简单字段：只需在 keyword_registry.yaml 的 generators.cmg 下添加一行
 # =============================================================================
 
 import json
+import sys
 from pathlib import Path
+from datetime import datetime
 
-def _fmt(v):
-    if isinstance(v, int): return str(v)
-    if v == 0.0: return "0.0"
-    if abs(v) >= 0.001 and abs(v) < 1e6:
-        return f"{v:.10g}"
-    return f"{v:.6E}"
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.rule_loader import get_loader
 
-def _vals(obj):
-    return [obj["value"]] if obj["type"] == "scalar" else obj["values"]
+# ── 格式化工具 ────────────────────────────────────────────────────────────────
 
-def _interp(xy_pairs, x):
-    """线性插值：给定 [(x0,y0),(x1,y1),...] 和 x，返回插值 y"""
-    if not xy_pairs:
-        return 0.0
-    if x <= xy_pairs[0][0]:
-        return xy_pairs[0][1]
-    if x >= xy_pairs[-1][0]:
-        return xy_pairs[-1][1]
-    for i in range(len(xy_pairs)-1):
-        x0, y0 = xy_pairs[i]
-        x1, y1 = xy_pairs[i+1]
-        if x0 <= x <= x1:
-            if x1 == x0:
-                return y0
-            t = (x - x0) / (x1 - x0)
-            return y0 + t * (y1 - y0)
-    return xy_pairs[-1][1]
+def _fmt(v, width=14):
+    """格式化单个数值，统一列宽"""
+    if isinstance(v, int):
+        return str(v).rjust(width)
+    if abs(v) >= 1e5 or (abs(v) < 1e-3 and v != 0):
+        return f"{v:.6E}".rjust(width)
+    return f"{v:.6g}".rjust(width)
+
+def _get_val(obj):
+    """从 JSON 值对象取出数值（scalar→value，array→values）"""
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        if obj.get("type") == "scalar":
+            return obj["value"]
+        if obj.get("type") == "array":
+            return obj["values"]
+    return obj
+
+def _get_modifier(obj):
+    if isinstance(obj, dict):
+        return obj.get("modifier")
+    return None
+
+# ── CMG 数组写入 ──────────────────────────────────────────────────────────────
+
+def _write_array(lines, keyword, obj):
+    """根据 JSON 对象的 type/modifier 写出 CMG 数组关键字"""
+    if obj is None:
+        return
+    t = obj.get("type") if isinstance(obj, dict) else None
+    mod = _get_modifier(obj)
+    val = _get_val(obj)
+
+    if t == "scalar" or (t == "array" and mod == "CON"):
+        v = val if t == "scalar" else (val[0] if isinstance(val, list) else val)
+        lines.append(f"{keyword} *CON  {_fmt(v).strip()}")
+    elif t == "array" and mod in (None, "KVAR", "IVAR", "JVAR", "ALL"):
+        cmg_mod = f"*{mod}" if mod else ""
+        if mod == "KVAR" or (mod is None and isinstance(val, list)):
+            mod_str = "*KVAR" if mod == "KVAR" else ""
+            lines.append(f"{keyword}{' ' + mod_str if mod_str else ''}")
+        else:
+            lines.append(f"{keyword} {cmg_mod}".strip())
+        if isinstance(val, list):
+            row = ""
+            for i, v in enumerate(val):
+                row += f"  {_fmt(v).strip()}"
+                if (i + 1) % 10 == 0:
+                    lines.append(row)
+                    row = ""
+            if row:
+                lines.append(row)
+    else:
+        # fallback
+        if isinstance(val, list):
+            lines.append(f"{keyword} *KVAR")
+            row = ""
+            for i, v in enumerate(val):
+                row += f"  {_fmt(v).strip()}"
+                if (i + 1) % 10 == 0:
+                    lines.append(row)
+                    row = ""
+            if row:
+                lines.append(row)
+        elif val is not None:
+            lines.append(f"{keyword} *CON  {_fmt(val).strip()}")
+
+
+# ── PVT 合并（pvto_table + pvdg_table → 6列 pvt_table）─────────────────────
+
+def _merge_pvt(fluid):
+    """
+    如果 JSON 里有 pvto_table + pvdg_table（Petrel来源），
+    合并为 CMG *PVT 格式的 6列表：p, rs, bo, eg, viso, visg
+    如果已有 pvt_table（CMG来源）则直接使用。
+    """
+    if fluid.get("pvt_table"):
+        return fluid["pvt_table"]
+
+    pvto = fluid.get("pvto_table")
+    pvdg = fluid.get("pvdg_table")
+    if not pvto or not pvdg:
+        return None
+
+    # pvto cols: [rs, p, bo, viso]
+    pvto_rows = pvto["rows"]
+    # pvdg cols: [p, bg, visg]
+    pvdg_rows = pvdg["rows"]
+
+    # 建立 PVDG 压力→(bg, visg) 插值字典
+    pvdg_p = [r[0] for r in pvdg_rows]
+    pvdg_bg = [r[1] for r in pvdg_rows]
+    pvdg_visg = [r[2] for r in pvdg_rows]
+
+    def _interp(px, xs, ys):
+        if px <= xs[0]:
+            return ys[0]
+        if px >= xs[-1]:
+            return ys[-1]
+        for i in range(len(xs) - 1):
+            if xs[i] <= px <= xs[i + 1]:
+                t = (px - xs[i]) / (xs[i + 1] - xs[i])
+                return ys[i] + t * (ys[i + 1] - ys[i])
+        return ys[-1]
+
+    # CMG *PVT 只支持饱和点（每个RS对应唯一的饱和压力）
+    # PVTO 中同一 RS 下的欠饱和点（后续更高压力行）须丢弃
+    # 判断依据：rs 值与上一行相同 → 欠饱和点
+    merged = []
+    seen_rs = set()
+    for row in pvto_rows:
+        rs, p, bo, viso = row[0], row[1], row[2], row[3]
+        # 跳过欠饱和行（同一 RS 已出现过）
+        rs_key = round(rs, 6)
+        if rs_key in seen_rs:
+            continue
+        seen_rs.add(rs_key)
+        bg = _interp(p, pvdg_p, pvdg_bg)
+        visg = _interp(p, pvdg_p, pvdg_visg)
+        eg = 1.0 / bg if bg > 0 else 0.0
+        merged.append([p, rs, bo, eg, viso, visg])
+
+    # 按压力升序排序（CMG *PVT 要求升序）
+    merged.sort(key=lambda r: r[0])
+
+    return {"type": "table",
+            "columns": ["p", "rs", "bo", "eg", "viso", "visg"],
+            "rows": merged,
+            "confidence": 0.95,
+            "source": "merged from pvto_table + pvdg_table"}
+
+
+# ── 相渗表合并（swfn/sgfn/sof3 → swt/slt）──────────────────────────────────
+
+def _merge_rockfluid(rockfluid):
+    """
+    如果 JSON 里有 swfn/sgfn/sof3（Petrel来源），合并为 CMG swt/slt。
+    如果已有 swt_table/slt_table（CMG来源）则直接使用。
+    """
+    # 优先使用已有表
+    swt = rockfluid.get("swt_table") or rockfluid.get("swof_table")
+    slt = rockfluid.get("slt_table") or rockfluid.get("sgof_table")
+
+    if not swt:
+        swt = _merge_swt(rockfluid)
+    if not slt:
+        slt = _merge_slt(rockfluid)
+
+    return swt, slt
+
+
+def _interp1d(x, xs, ys):
+    if len(xs) < 2:
+        return ys[0] if ys else 0.0
+    if x <= xs[0]: return ys[0]
+    if x >= xs[-1]: return ys[-1]
+    for i in range(len(xs) - 1):
+        if xs[i] <= x <= xs[i + 1]:
+            t = (x - xs[i]) / (xs[i + 1] - xs[i])
+            return ys[i] + t * (ys[i + 1] - ys[i])
+    return ys[-1]
+
+
+def _merge_swt(rockfluid):
+    """SWFN(sw,krw,pcow) + SOF3(so,krow,krog) → SWT(sw,krw,krow,pcow)"""
+    swfn = rockfluid.get("swfn_table")
+    sof3 = rockfluid.get("sof3_table")
+    if not swfn:
+        return None
+
+    swfn_rows = swfn["rows"]   # [sw, krw, pcow]
+    sof3_rows = sof3["rows"] if sof3 else None
+
+    # SOF3: so→krow
+    if sof3_rows:
+        sof3_so   = [r[0] for r in sof3_rows]
+        sof3_krow = [r[1] for r in sof3_rows]
+    else:
+        sof3_so = sof3_krow = None
+
+    rows = []
+    for row in swfn_rows:
+        sw, krw, pcow = row[0], row[1], row[2]
+        if sof3_so:
+            so = 1.0 - sw
+            krow = _interp1d(so, sof3_so, sof3_krow)
+        else:
+            krow = 1.0 - sw  # fallback 线性
+        rows.append([sw, krw, krow, pcow])
+
+    return {"type": "table",
+            "columns": ["sw", "krw", "krow", "pcow"],
+            "rows": rows,
+            "confidence": 0.9,
+            "source": "merged from swfn_table + sof3_table"}
+
+
+def _merge_slt(rockfluid):
+    """SGFN(sg,krg,pcog) + SOF3(so,krow,krog) → SLT(sl,krg,krog,pcog)"""
+    sgfn = rockfluid.get("sgfn_table")
+    sof3 = rockfluid.get("sof3_table")
+    if not sgfn:
+        return None
+
+    sgfn_rows = sgfn["rows"]   # [sg, krg, pcog]
+    sof3_rows = sof3["rows"] if sof3 else None
+
+    if sof3_rows:
+        sof3_so   = [r[0] for r in sof3_rows]
+        sof3_krog = [r[2] for r in sof3_rows]
+    else:
+        sof3_so = sof3_krog = None
+
+    rows = []
+    for row in sgfn_rows:
+        sg, krg, pcog = row[0], row[1], row[2]
+        sl = 1.0 - sg
+        if sof3_so:
+            so = 1.0 - sg
+            krog = _interp1d(so, sof3_so, sof3_krog)
+        else:
+            krog = sg  # fallback
+        rows.append([sl, krg, krog, pcog])
+
+    # SLT 按 sl 升序排列
+    rows.sort(key=lambda r: r[0])
+
+    return {"type": "table",
+            "columns": ["sl", "krg", "krog", "pcog"],
+            "rows": rows,
+            "confidence": 0.9,
+            "source": "merged from sgfn_table + sof3_table"}
+
+
+# ── 主生成器 ──────────────────────────────────────────────────────────────────
 
 class CMGGenerator:
-    def __init__(self, data):
-        self.d = data
-        self.lines = []
 
-    def _w(self, line=""):
-        self.lines.append(line)
+    def __init__(self):
+        self._rl = get_loader()
+        self._gen_cfg = self._rl.cmg_gen_config()
 
-    def _section(self, title):
-        self._w()
-        self._w("** " + "*"*74)
-        self._w(f"** {title}")
-        self._w("** " + "*"*74)
+    def generate(self, data):
+        lines = []
+        meta      = data.get("meta", {})
+        grid      = data.get("grid", {})
+        reservoir = data.get("reservoir", {})
+        fluid     = data.get("fluid", {})
+        rockfluid = data.get("rockfluid", {})
+        initial   = data.get("initial", {})
+        numerical = data.get("numerical", {})
+        wells     = data.get("wells", [])
 
-    def _write_array(self, kw, obj):
-        """根据保存的modifier还原正确的写法。
-        注意：如果来源是 Petrel（层序 k=1=顶层），KVAR 数组需要反转为 CMG 层序（k=1=底层）。
-        """
-        vals = _vals(obj)
-        modifier = obj.get("modifier", "")
-        is_scalar_val = obj["type"] == "scalar"
+        # ── 文件头 ────────────────────────────────────────────────────────────
+        lines += [
+            f"** Generated by UDA Middle Layer",
+            f"** Source: {meta.get('source_file', 'unknown')}",
+            f"** Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"** Source software: {meta.get('source_software', 'unknown')}",
+            "",
+            "*RESULTS *SIMULATOR *IMEX",
+            "*TITLE1 'Converted by UDA Middle Layer'",
+            "",
+            f"*INUNIT *{meta.get('unit_system', 'field').upper()}",
+            "",
+            "*WPRN *WELL *TIME",
+            "*OUTSRF *WELL *ALL",
+            "",
+        ]
 
-        # 判断是否需要反转：来源是 Petrel 且为 KVAR 数组
-        src = obj.get("source", "")
-        if (modifier == "KVAR" and not is_scalar_val and
-                ("EQUALS" in src or "petrel" in src.lower() or "eclipse" in src.lower())):
-            vals = list(reversed(vals))
+        # ── GRID ──────────────────────────────────────────────────────────────
+        lines.append("** ============================================================")
+        lines.append("** GRID")
+        lines.append("** ============================================================")
+        self._write_grid(lines, grid)
+        lines.append("")
 
-        if is_scalar_val or modifier == "CON":
-            self._w(f"{kw} *CON {_fmt(vals[0])}")
-        elif modifier in ("KVAR","IVAR","JVAR"):
-            self._w(f"{kw} *{modifier}")
-            self._w("   " + "  ".join(_fmt(v) for v in vals))
-        elif modifier == "ALL":
-            self._w(f"{kw} *ALL")
-            # 每行最多8个值
-            for i in range(0, len(vals), 8):
-                self._w("   " + "  ".join(_fmt(v) for v in vals[i:i+8]))
+        # ── RESERVOIR ─────────────────────────────────────────────────────────
+        lines.append("** ============================================================")
+        lines.append("** RESERVOIR")
+        lines.append("** ============================================================")
+        self._write_section(lines, "reservoir", reservoir, grid=grid)
+        lines.append("")
+
+        # ── FLUID ─────────────────────────────────────────────────────────────
+        lines.append("** ============================================================")
+        lines.append("** FLUID")
+        lines.append("** ============================================================")
+        lines.append("*MODEL *BLACKOIL")
+        self._write_fluid(lines, fluid)
+        lines.append("")
+
+        # ── ROCKFLUID ─────────────────────────────────────────────────────────
+        lines.append("** ============================================================")
+        lines.append("** ROCKFLUID")
+        lines.append("** ============================================================")
+        lines.append("*ROCKFLUID")
+        self._write_rockfluid(lines, rockfluid)
+        lines.append("")
+
+        # ── INITIAL ───────────────────────────────────────────────────────────
+        lines.append("** ============================================================")
+        lines.append("** INITIAL")
+        lines.append("** ============================================================")
+        lines.append("*INITIAL")
+        lines.append("*VERTICAL *BLOCK_CENTER *WATER_OIL_GAS")
+        self._write_section(lines, "initial", initial)
+        lines.append("")
+
+        # ── NUMERICAL ─────────────────────────────────────────────────────────
+        lines.append("** ============================================================")
+        lines.append("** NUMERICAL")
+        lines.append("** ============================================================")
+        lines.append("*NUMERICAL")
+        self._write_section(lines, "numerical", numerical)
+        lines.append("")
+
+        # ── WELLS ─────────────────────────────────────────────────────────────
+        lines.append("** ============================================================")
+        lines.append("** WELL DATA")
+        lines.append("** ============================================================")
+        lines.append("*RUN")
+        self._write_wells(lines, wells, data.get("meta", {}))
+
+        lines.append("*STOP")
+        return "\n".join(lines) + "\n"
+
+    # ── 通用分区写入 ─────────────────────────────────────────────────────────
+
+    def _write_section(self, lines, section_name, section_data, grid=None):
+        cfg = self._gen_cfg.get(section_name, {})
+        gt = (grid or {}).get("grid_type", "CART").upper() if grid else "CART"
+
+        for key, field_cfg in cfg.items():
+            kw = field_cfg.get("keyword")
+            fmt = field_cfg.get("format")
+            if not kw or fmt in ("depth_from_tops", "depth_block"):
+                continue
+            obj = section_data.get(key)
+
+            # 径向网格：perm_j 缺失时用 perm_i 填充（PERMR 同时作径向和切向）
+            if obj is None and section_name == "reservoir" and gt == "RADIAL":
+                if key == "perm_j":
+                    obj = section_data.get("perm_i")
+                elif key == "perm_k" and section_data.get("perm_k") is None:
+                    # perm_k 若真的缺失才跳过（PERMZ 可能已经 MULTIPLY 了，保留原值）
+                    pass
+
+            if obj is None:
+                continue
+            val = _get_val(obj)
+            if val is None:
+                continue
+
+            if fmt == "scalar_inline":
+                lines.append(f"{kw}  {_fmt(val).strip()}")
+            elif fmt == "array":
+                _write_array(lines, kw, obj)
+
+    # ── 网格写入 ──────────────────────────────────────────────────────────────
+
+    def _write_array_forced(self, lines, keyword, obj, modifier):
+        """强制指定修饰词写数组，忽略 JSON 里原有的 modifier。
+        用于径向网格 *DI *IVAR / *DK *KVAR 等必须指定方向的场景。"""
+        val = _get_val(obj)
+        if val is None:
+            return
+        if modifier == "CON":
+            v = val[0] if isinstance(val, list) else val
+            lines.append(f"{keyword} *CON  {_fmt(v).strip()}")
         else:
-            if len(vals) == 1:
-                self._w(f"{kw} *CON {_fmt(vals[0])}")
-            else:
-                self._w(f"{kw} *KVAR")
-                self._w("   " + "  ".join(_fmt(v) for v in vals))
+            lines.append(f"{keyword} *{modifier}")
+            vals = val if isinstance(val, list) else [val]
+            row = ""
+            for i, v in enumerate(vals):
+                row += f"  {_fmt(v).strip()}"
+                if (i + 1) % 10 == 0:
+                    lines.append(row)
+                    row = ""
+            if row:
+                lines.append(row)
 
-    def _gen_io(self):
-        self._section("I/O Control Section")
-        self._w("RESULTS SIMULATOR IMEX")
-        self._w()
-        src = self.d["meta"].get("source_file","unknown")
-        ts  = self.d["meta"].get("conversion_timestamp","")[:10]
-        self._w(f"** Generated from: {src}  ({ts})")
-        self._w()
-        us = self.d["meta"].get("unit_system","field").upper()
-        self._w(f"*INUNIT *{us}")
+    def _write_grid(self, lines, grid):
+        ni = grid.get("ni", 1)
+        nj = grid.get("nj", 1)
+        nk = grid.get("nk", 1)
+        gt = grid.get("grid_type", "CART").upper()
 
-    def _gen_grid(self):
-        g = self.d.get("grid", {})
-        if not g: return
-        self._section("Reservoir Description Section")
-        gtype = g.get("grid_type","CART")
-        ni, nj, nk = g.get("ni",""), g.get("nj",""), g.get("nk","")
-        self._w(f"*GRID *{gtype}  {ni}  {nj}  {nk}")
+        if gt == "RADIAL":
+            lines.append(f"*GRID *RADIAL  {ni}  {nj}  {nk}")
+            rw = _get_val(grid.get("inrad"))
+            if rw is not None:
+                lines.append(f"*RW  {_fmt(rw).strip()}")
 
-        for key, kw in [("di","*DI"),("dj","*DJ"),("dk","*DK")]:
-            obj = g.get(key)
-            if obj: self._write_array(kw, obj)
-
-        # CMG 原生格式：*DEPTH i j k value（来自 depth_ref_block）
-        depth = g.get("depth_ref_block")
-        if depth:
-            i = depth.get("i", 1)
-            j = depth.get("j", 1)
-            k = depth.get("k", 1)
-            self._w(f"*DEPTH  {i}  {j}  {k}  {_fmt(depth['value'])}")
-        # Petrel 来源：TOPS（顶深）→ 推算第一块中心深度
-        elif g.get("tops_ref"):
-            tops = g["tops_ref"]
-            nk = g.get("nk", 1)
-            # Petrel tops 是顶层(k=1)的顶深，CMG DEPTH 是块中心深度
-            # 顶层(Petrel k=1) 在 CMG 中是最底层(k=nk)
-            # 取最底层中心：tops + DK_bottom/2（若 DK 是 KVAR，取最后一层）
-            dk_obj = g.get("dk")
-            if dk_obj:
-                dk_vals = _vals(dk_obj)
-                # CMG 底层在 Petrel 的最后一个 k
-                dk_bottom = dk_vals[-1] if dk_vals else 0.0
-            else:
-                dk_bottom = 0.0
-            center_depth = tops["value"] + dk_bottom / 2.0
-            self._w(f"*DEPTH  1  1  1  {_fmt(center_depth)}")
-
-    def _gen_reservoir(self):
-        r = self.d.get("reservoir", {})
-        if not r: return
-        self._w()
-        self._w("** Rock Properties")
-        for key, kw in [("porosity","*POR"),("perm_i","*PERMI"),
-                        ("perm_j","*PERMJ"),("perm_k","*PERMK")]:
-            obj = r.get(key)
-            if obj: self._write_array(kw, obj)
-        for key, kw in [("rock_ref_pressure","*PRPOR"),
-                        ("rock_compressibility","*CPOR")]:
-            obj = r.get(key)
-            if obj: self._w(f"{kw}  {_fmt(obj['value'])}")
-
-    def _gen_fluid(self):
-        f = self.d.get("fluid", {})
-        if not f: return
-        self._section("Component Property Section")
-        self._w("*MODEL *BLACKOIL")
-        self._w()
-        # CMG 原生 *PVT 表（6列：p rs bo eg viso visg）
-        pvt = f.get("pvt_table")
-        if pvt:
-            self._w("*PVT")
-            cols = pvt["columns"]
-            self._w("** " + "".join(f"{c:>12}" for c in cols))
-            for row in pvt["rows"]:
-                self._w("   " + "".join(f"{_fmt(v):>12}" for v in row))
-            self._w()
-        # Petrel 来源的 PVTO（活油）+ PVDG（干气）→ 合并为 CMG *PVT 6列
-        pvto = f.get("pvto_table")
-        pvdg = f.get("pvdg_table")
-        if pvto and not pvt:
-            # 以 PVTO 为主，匹配 PVDG 中相同压力点的 eg/visg
-            pvdg_map = {}
-            if pvdg:
-                for row in pvdg["rows"]:
-                    # Petrel PVDG: p bg visg; CMG *PVT eg = 1/bg (RB/Mscf → reciprocal)
-                    p = row[0]
-                    bg   = row[1] if len(row) > 1 else 0.0
-                    visg = row[2] if len(row) > 2 else 0.0
-                    eg = (1.0 / bg) if bg > 0 else 0.0
-                    pvdg_map[p] = (eg, visg)
-
-            self._w("*PVT")
-            self._w("** " + "  ".join(f"{c:>12}" for c in ["p","rs","bo","eg","viso","visg"]))
-            for row in pvto["rows"]:
-                rs, p, bo, viso = row[0], row[1], row[2], row[3]
-                # 插值取最近的 PVDG 压力点
-                if pvdg_map:
-                    closest_p = min(pvdg_map.keys(), key=lambda x: abs(x - p))
-                    eg, visg = pvdg_map[closest_p]
+            # *DI *IVAR — 径向方向，ni 个值（不能用 *CON/*KVAR）
+            di_obj = grid.get("di") or grid.get("drv")
+            if di_obj:
+                di_val = _get_val(di_obj)
+                if isinstance(di_val, list) and len(set(round(v,6) for v in di_val)) == 1:
+                    # 所有径向间距相同时才可以用 *CON
+                    self._write_array_forced(lines, "*DI", di_obj, "CON")
                 else:
-                    eg, visg = 0.0, 0.0
-                vals = [p, rs, bo, eg, viso, visg]
-                self._w("  " + "  ".join(f"{_fmt(v):>12}" for v in vals))
-            self._w()
+                    self._write_array_forced(lines, "*DI", di_obj, "IVAR")
 
-        for key, kw in [("oil_density","*OIL"),("gas_density","*GAS"),
-                        ("water_density","*WATER")]:
-            obj = f.get(key)
-            if obj: self._w(f"*DENSITY {kw}  {_fmt(obj['value'])}")
-        for key, kw in [("oil_compressibility","*CO"),
-                        ("oil_viscosity_coeff","*CVO"),
-                        ("water_fvf","*BWI"),
-                        ("water_compressibility","*CW"),
-                        ("water_ref_pressure","*REFPW"),
-                        ("water_viscosity","*VWI"),
-                        ("water_viscosity_coeff","*CVW")]:
-            obj = f.get(key)
-            if obj: self._w(f"{kw}  {_fmt(obj['value'])}")
-
-    def _gen_rockfluid(self):
-        rf = self.d.get("rockfluid", {})
-        if not rf: return
-        self._section("Rock-Fluid Property Section")
-        self._w("*ROCKFLUID")
-        self._w("*RPT 1")
-
-        # ── 路径A：CMG原生 SWT / SLT ──────────────────────────────────────────
-        for key, kw in [("swt_table","*SWT"),("slt_table","*SLT")]:
-            tbl = rf.get(key)
-            if not tbl: continue
-            self._w(kw)
-            cols = tbl["columns"]
-            self._w("**" + "".join(f"{c:>14}" for c in cols))
-            for row in tbl["rows"]:
-                self._w("  " + "".join(f"{_fmt(v):>14}" for v in row))
-
-        # ── 路径B：Petrel SWFN + SGFN + SOF3 → CMG *SWT / *SLT ──────────────
-        swfn = rf.get("swfn_table")   # columns: sw  krw  pcow
-        sgfn = rf.get("sgfn_table")   # columns: sg  krg  pcog
-        sof3 = rf.get("sof3_table")   # columns: so  krow krog
-
-        # *SWT：sw krw krow [pcow]
-        # sw 来自 SWFN，krw 来自 SWFN，krow 来自 SOF3（通过 so=1-sw 插值）
-        if swfn and not rf.get("swt_table"):
-            self._w("*SWT")
-            self._w("**" + "".join(f"{c:>14}" for c in ["sw","krw","krow","pcow"]))
-            sof3_rows = sof3["rows"] if sof3 else []
-            # 建立 so->krow 的查找表（用于插值）
-            so_krow = [(r[0], r[1]) for r in sof3_rows] if sof3_rows else []
-            for sw_row in swfn["rows"]:
-                sw   = sw_row[0]
-                krw  = sw_row[1]
-                pcow = sw_row[2] if len(sw_row) > 2 else 0.0
-                # so = 1 - sw（忽略气饱和度，假设两相）
-                so = round(1.0 - sw, 8)
-                krow = _interp(so_krow, so) if so_krow else 0.0
-                self._w("  " + "".join(f"{_fmt(v):>14}" for v in [sw, krw, krow, pcow]))
-
-        # *SLT：sl krg krog [pcog]，sl = 1 - sg
-        # sl 来自 SGFN（转换），krg 来自 SGFN，krog 来自 SOF3
-        if sgfn and not rf.get("slt_table"):
-            self._w("*SLT")
-            self._w("**" + "".join(f"{c:>14}" for c in ["sl","krg","krog","pcog"]))
-            sof3_rows = sof3["rows"] if sof3 else []
-            so_krog = [(r[0], r[2]) for r in sof3_rows] if sof3_rows else []
-            # SGFN 按 sg 递增，SLT 按 sl=1-sg 排列，sl 应递减→需要反转后再逆序输出
-            sgfn_rows_rev = list(reversed(sgfn["rows"]))
-            for sg_row in sgfn_rows_rev:
-                sg   = sg_row[0]
-                krg  = sg_row[1]
-                pcog = sg_row[2] if len(sg_row) > 2 else 0.0
-                sl   = round(1.0 - sg, 8)
-                so   = sl   # 近似：忽略连生水饱和度
-                krog = _interp(so_krog, so) if so_krog else 0.0
-                self._w("  " + "".join(f"{_fmt(v):>14}" for v in [sl, krg, krog, pcog]))
-
-    def _gen_initial(self):
-        ini = self.d.get("initial", {})
-        if not ini: return
-        self._section("Initial Conditions Section")
-        self._w("*INITIAL")
-        if ini.get("ref_pressure") or ini.get("woc_depth"):
-            self._w("*VERTICAL *BLOCK_CENTER *WATER_OIL_GAS")
-        elif ini.get("pressure"):
-            self._w("*USER_INPUT")
-
-        def _write_ini(key, kw):
-            obj = ini.get(key)
-            if obj is None: return
-            vals = _vals(obj)
-            mod = obj.get("modifier","")
-            if obj["type"] == "scalar" or mod == "CON":
-                self._w(f"{kw} *CON  {_fmt(vals[0])}")
-            elif mod in ("KVAR","IVAR","JVAR"):
-                self._w(f"{kw} *{mod}")
-                self._w("   " + "  ".join(_fmt(v) for v in vals))
+            # *DJ *CON 360 — 角度方向（径向模型通常固定360°）
+            dj_obj = grid.get("dj") or grid.get("dtheta")
+            if dj_obj:
+                dj_val = _get_val(dj_obj)
+                if isinstance(dj_val, list):
+                    if len(set(round(v, 4) for v in dj_val)) == 1:
+                        lines.append(f"*DJ *CON {dj_val[0]:.1f}")
+                    else:
+                        self._write_array_forced(lines, "*DJ", dj_obj, "JVAR")
+                elif dj_val is not None:
+                    lines.append(f"*DJ *CON {dj_val:.1f}")
+                else:
+                    lines.append("*DJ *CON 360.0")
             else:
-                self._w(f"{kw} *CON  {_fmt(vals[0])}")
+                lines.append("*DJ *CON 360.0")
 
-        _write_ini("bubble_point_pressure",        "*PB")
-        _write_ini("solvent_bubble_point_pressure", "*PBS")
-        _write_ini("pressure",                     "*PRES")
-        _write_ini("water_saturation",             "*SW")
-        _write_ini("oil_saturation",               "*SO")
-        _write_ini("gas_saturation",               "*SG")
+            # *DK *KVAR — 层方向，nk 个值（不能用 *IVAR）
+            dk_obj = grid.get("dk")
+            if dk_obj:
+                dk_val = _get_val(dk_obj)
+                if isinstance(dk_val, list) and len(set(round(v,6) for v in dk_val)) == 1:
+                    self._write_array_forced(lines, "*DK", dk_obj, "CON")
+                else:
+                    self._write_array_forced(lines, "*DK", dk_obj, "KVAR")
 
-        for key, kw in [("ref_pressure","*REFPRES"),("ref_depth","*REFDEPTH"),
-                        ("woc_depth","*DWOC"),("goc_depth","*DGOC")]:
-            obj = ini.get(key)
-            if obj: self._w(f"{kw}  {_fmt(obj['value'])}")
-
-    def _gen_numerical(self):
-        num = self.d.get("numerical", {})
-        if not num: return
-        self._section("Numerical Control Section")
-        self._w("*NUMERICAL")
-        for key, kw in [("max_timestep","*DTMAX"),("max_steps","*MAXSTEPS")]:
-            obj = num.get(key)
-            if obj:
-                v = obj["value"]
-                self._w(f"{kw}  {int(v) if key=='max_steps' else _fmt(v)}")
-
-    def _gen_wells(self):
-        raw_wells = self.d.get("wells", [])
-        # 支持 CMG 原生（有 well_index）和 Petrel 来源（无 well_index，自动编号）
-        wells = []
-        for i, w in enumerate(raw_wells):
-            if isinstance(w.get("well_index"), int):
-                wells.append(w)
-            else:
-                # Petrel 来源：自动分配编号
-                wc = dict(w)
-                wc["well_index"] = i + 1
-                wells.append(wc)
-        if not wells: return
-        self._section("Well and Recurrent Data Section")
-        self._w("*RUN")
-
-        # 起始日期
-        date = self.d["meta"].get("start_date")
-        if date:
-            self._w(f"*DATE {date.replace('-',' ')}")
         else:
-            self._w("*DATE 1990 01 01")
+            # 笛卡尔网格：*DI/*DJ/*DK，修饰词由 JSON modifier 决定（CON/KVAR等均合法）
+            lines.append(f"*GRID *CART  {ni}  {nj}  {nk}")
+            for key, kw in [("di", "*DI"), ("dj", "*DJ"), ("dk", "*DK")]:
+                obj = grid.get(key)
+                if obj:
+                    _write_array(lines, kw, obj)
 
-        dtwell = self.d["meta"].get("dtwell")
-        if dtwell: self._w(f"*DTWELL {_fmt(dtwell)}")
-        else:      self._w("*DTWELL 1.0")
+        # 深度
+        depth_obj = grid.get("depth_ref_block")
+        if depth_obj and isinstance(depth_obj, dict):
+            i = depth_obj.get("i", 1)
+            j = depth_obj.get("j", 1)
+            k = depth_obj.get("k", 1)
+            v = depth_obj.get("value", 0)
+            lines.append(f"*DEPTH  {i}  {j}  {k}  {_fmt(v).strip()}")
+        elif grid.get("tops_ref"):
+            tops_val = _get_val(grid["tops_ref"])
+            if isinstance(tops_val, list):
+                lines.append(f"*DEPTH  1  1  1  {_fmt(tops_val[0]).strip()}")
+            elif tops_val is not None:
+                lines.append(f"*DEPTH  1  1  1  {_fmt(tops_val).strip()}")
 
-        for w in wells:
-            self._w()
-            idx  = w.get("well_index", 1)
-            name = w.get("well_name","Well")
-            self._w(f"*WELL {idx}  '{name}'")
+    # ── 流体写入 ──────────────────────────────────────────────────────────────
 
-            wtype = w.get("well_type","PRODUCER")
+    def _write_fluid(self, lines, fluid):
+        # PVT 表（合并 pvto+pvdg 或直接用 pvt_table）
+        pvt = _merge_pvt(fluid)
+        if pvt:
+            lines.append("")
+            lines.append("*PVT")
+            lines.append(f"** {'p':>12} {'rs':>12} {'bo':>12} {'eg':>12} {'viso':>12} {'visg':>12}")
+            for row in pvt["rows"]:
+                lines.append("  " + "".join(_fmt(v) for v in row))
+
+        # 密度
+        cfg = self._gen_cfg.get("fluid", {})
+        for key, field_cfg in cfg.items():
+            if key == "pvt_table":
+                continue
+            kw = field_cfg.get("keyword")
+            if not kw:
+                continue
+            obj = fluid.get(key)
+            if obj is None:
+                continue
+            val = _get_val(obj)
+            if val is None:
+                continue
+            lines.append(f"{kw}  {_fmt(val).strip()}")
+
+    # ── 相渗写入 ──────────────────────────────────────────────────────────────
+
+    def _write_rockfluid(self, lines, rockfluid):
+        swt, slt = _merge_rockfluid(rockfluid)
+        lines.append("*RPT 1")
+        if swt:
+            cols = swt.get("columns", ["sw", "krw", "krow", "pcow"])
+            lines.append(f"*SWT")
+            lines.append("** " + "  ".join(f"{c:>10}" for c in cols))
+            for row in swt["rows"]:
+                lines.append("  " + "".join(_fmt(v) for v in row))
+        if slt:
+            cols = slt.get("columns", ["sl", "krg", "krog", "pcog"])
+            lines.append(f"*SLT")
+            lines.append("** " + "  ".join(f"{c:>10}" for c in cols))
+            for row in slt["rows"]:
+                lines.append("  " + "".join(_fmt(v) for v in row))
+
+    # ── 井写入 ────────────────────────────────────────────────────────────────
+
+    def _write_wells(self, lines, wells, meta):
+        if not wells:
+            return
+
+        start_date = meta.get("start_date")
+        if start_date:
+            parts = start_date.split("-")
+            if len(parts) == 3:
+                lines.append(f"*DATE {parts[0]} {parts[1]} {parts[2]}")
+        else:
+            lines.append("*DATE 1900 01 01")
+        lines.append("")
+
+        dtwell = meta.get("dtwell")
+        if dtwell:
+            lines.append(f"*DTWELL  {dtwell}")
+
+        # 写出井定义
+        for idx, w in enumerate(wells, start=1):
+            wname = w.get("well_name", f"W{idx}")
+            wtype = (w.get("well_type") or "PRODUCER").upper()
+
+            lines.append(f"*WELL {idx} '{wname}'")
+
             if wtype == "INJECTOR":
-                self._w(f"*INJECTOR *UNWEIGHT {idx}")
-                self._w("*INCOMP *GAS")
+                inj = (w.get("inj_fluid") or "GAS").upper()
+                lines.append(f"*INJECTOR *UNWEIGHT {idx}")
+                lines.append(f"*INCOMP *{inj}")
+                bhp_max = w.get("bhp_max")
+                rate_max = w.get("rate_max")
+                if rate_max:
+                    lines.append(f"*OPERATE *MAX *STG  {_fmt(rate_max).strip()}")
+                if bhp_max:
+                    lines.append(f"*OPERATE *MAX *BHP  {_fmt(bhp_max).strip()}")
             else:
-                self._w(f"*PRODUCER {idx}")
+                lines.append(f"*PRODUCER {idx}")
+                bhp_min = w.get("bhp_min")
+                rate_max = w.get("rate_max")
+                if rate_max:
+                    lines.append(f"*OPERATE *MAX *STO  {_fmt(rate_max).strip()}")
+                if bhp_min:
+                    lines.append(f"*OPERATE *MIN *BHP  {_fmt(bhp_min).strip()}")
 
-            if w.get("rate_max") is not None:
-                kw = "*STG" if wtype == "INJECTOR" else "*STO"
-                self._w(f"*OPERATE *MAX {kw}  {_fmt(w['rate_max'])}")
-            if w.get("rate_min") is not None:
-                self._w(f"*OPERATE *MIN *STO  {_fmt(w['rate_min'])}")
-            if w.get("bhp_max") is not None:
-                self._w(f"*OPERATE *MAX *BHP  {_fmt(w['bhp_max'])}")
-            if w.get("bhp_min") is not None:
-                self._w(f"*OPERATE *MIN *BHP  {_fmt(w['bhp_min'])}  *CONT *REPEAT")
-
-            # 井筒几何
+            # 井几何
             radius = w.get("well_radius")
-            if radius is not None:
-                gf   = _fmt(w.get("geofac", 0.34))
-                wf   = _fmt(w.get("wfrac",  1.0))
-                skin = _fmt(w.get("skin",   0.0))
-                self._w(f"*GEOMETRY *K  {_fmt(radius)}  {gf}  {wf}  {skin}")
+            geofac = w.get("geofac", 0.34)
+            wfrac  = w.get("wfrac",  1.0)
+            skin   = w.get("skin",   0.0)
+            if radius and radius > 0:
+                lines.append(f"*GEOMETRY *K  {radius:.4f}  {geofac:.2f}  {wfrac:.1f}  {skin:.1f}")
 
             # 射孔
             perfs = w.get("perforations", [])
             if perfs:
-                ptype = perfs[0].get("perf_type","PERF")
-                # COMPDAT 来源时 wi=-1 表示"由软件计算"；有 GEOMETRY 时用 *GEO，否则给默认值 1.0
-                def _wi(p):
-                    v = p.get("wi", 1.0)
-                    if v < 0:
-                        return 1.0  # 占位：CMG 在有 *GEOMETRY 时会忽略此值
-                    return v
-                geo_tag = "*GEO " if radius is not None else ""
-                if ptype == "PERFV":
-                    self._w(f"*PERFV {geo_tag}{idx}")
-                    self._w("** kf   ff")
-                    # 合并连续的k值范围
-                    ks = sorted(set(p["k"] for p in perfs))
-                    if len(ks) > 1 and ks[-1]-ks[0] == len(ks)-1:
-                        self._w(f"  {ks[0]}:{ks[-1]}  {_fmt(_wi(perfs[0]))}")
-                    else:
-                        for p in perfs:
-                            self._w(f"  {p['k']}  {_fmt(_wi(p))}")
-                else:
-                    self._w(f"*PERF {geo_tag}{idx}")
-                    self._w("** if  jf  kf   wi")
-                    for p in perfs:
-                        self._w(f"   {p['i']}  {p['j']}  {p['k']}  {_fmt(_wi(p))}")
+                lines.append(f"*PERF {idx}")
+                for p in perfs:
+                    wi = p.get("wi", -1.0)
+                    if wi <= 0:
+                        wi = 1.0
+                    lines.append(f"  {p['i']}  {p['j']}  {p['k']}  {_fmt(wi).strip()}")
+            lines.append("")
 
-            # ALTER时间表
-            alters = w.get("alter_schedule", [])
-            for a in alters:
-                self._w()
-                self._w(f"*TIME {_fmt(a['time'])}")
-                self._w(f"*ALTER")
-                self._w(f"   {idx}")
-                self._w(f"   {_fmt(a['rate'])}")
+        # 动态调度（ALTER）
+        self._write_schedule(lines, wells, meta)
 
-        self._w()
-        self._w("*TIME 3650.0")
-        self._w("*STOP")
+    def _write_schedule(self, lines, wells, meta):
+        """
+        将 alter_schedule 中的时间点汇总，按时间顺序写 *TIME/*ALTER。
+        支持两种来源：
+          CMG来源: {time: float, rate: float}
+          Petrel来源: {time: float, target: str, value: float}
+        """
+        # 收集所有 (time, well_idx, entry) 事件
+        events = []
+        for idx, w in enumerate(wells, start=1):
+            for ev in w.get("alter_schedule", []):
+                t = ev.get("time", 0.0)
+                events.append((t, idx, ev, w))
 
-    def generate(self):
-        self._gen_io()
-        self._gen_grid()
-        self._gen_reservoir()
-        self._gen_fluid()
-        self._gen_rockfluid()
-        self._gen_initial()
-        self._gen_numerical()
-        self._gen_wells()
-        return "\n".join(self.lines)
+        if not events:
+            return
+
+        events.sort(key=lambda e: e[0])
+        current_time = 0.0
+        lines.append("** ── 动态调度 ──")
+
+        # 按时间分组
+        from itertools import groupby
+        for t, group in groupby(events, key=lambda e: e[0]):
+            group = list(group)
+            if t != current_time:
+                lines.append(f"*TIME  {t:.2f}")
+                current_time = t
+            for _, idx, ev, w in group:
+                if "rate" in ev:
+                    rate = ev["rate"]
+                    lines.append(f"*ALTER  {idx}  {_fmt(rate).strip()}")
+                elif "target" in ev:
+                    target = ev.get("target", "ORATE")
+                    val    = ev.get("value", 0.0)
+                    lines.append(f"** WELTARG: {w.get('well_name')} {target}={val}")
+                    lines.append(f"*ALTER  {idx}  {_fmt(val).strip()}")
+
+        # 结束时间
+        total_time = meta.get("_total_sim_time", 0.0)
+        if not total_time:
+            total_time = current_time + 3650.0
+        if current_time < total_time:
+            lines.append(f"*TIME  {total_time:.2f}")
 
 
-def generate_cmg(data, output_path):
-    text = CMGGenerator(data).generate()
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(text)
-    return text
+# ── 对外接口 ──────────────────────────────────────────────────────────────────
+
+def generate_cmg(data_or_json, output_file=None):
+    if isinstance(data_or_json, (str, Path)):
+        with open(data_or_json, encoding="utf-8") as f:
+            data = json.load(f)
+    else:
+        data = data_or_json
+
+    content = CMGGenerator().generate(data)
+
+    if output_file:
+        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(content)
+
+    return content
 
 
 if __name__ == "__main__":
-    import sys
-
-    default_json = Path("outputs/json/mxspe001_parsed.json")
-    json_file = Path(sys.argv[1]) if len(sys.argv) > 1 else default_json
+    default_json = Path("outputs/json/SPE2_CHAP_parsed.json")
+    src = Path(sys.argv[1]) if len(sys.argv) > 1 else default_json
 
     out_dir = Path("outputs/cmg")
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / f"{json_file.stem.replace('_parsed', '')}_roundtrip.dat"
+    stem = Path(src).stem.replace("_parsed", "")
+    out = out_dir / f"{stem}_converted.dat"
 
-    with open(json_file, encoding="utf-8") as f:
-        data = json.load(f)
-    generate_cmg(data, out_file)
-    print(f"Generated: {out_file}")
+    generate_cmg(src, str(out))
+    print(f"CMG file written: {out}")

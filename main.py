@@ -1,67 +1,88 @@
-from __future__ import annotations
+#!/usr/bin/env python3
+# =============================================================================
+# main.py  —  UDA Middle Layer 统一入口
+# =============================================================================
 
+import sys
 import argparse
-import json
 from pathlib import Path
 
-from generators.cmg_generator import generate_cmg
-from parsers.cmg_parser import parse_cmg
+sys.path.insert(0, str(Path(__file__).parent))
+
+from parsers.petrel_parser       import parse_petrel
+from parsers.cmg_parser          import parse_cmg
+from generators.cmg_generator    import generate_cmg
+from generators.petrel_generator import generate_petrel
 
 
-def _default_output_for_parse(input_path: Path) -> Path:
-    out_dir = Path("outputs/json")
+def cmd_parse_petrel(args):
+    src = Path(args.input)
+    out_dir = Path(args.output) if args.output else Path("outputs/json")
     out_dir.mkdir(parents=True, exist_ok=True)
-    return out_dir / f"{input_path.stem}_parsed.json"
+    out = out_dir / f"{src.stem}_parsed.json"
+    d = parse_petrel(src, str(out))
+    g = d["grid"]
+    print(f"parse-petrel OK")
+    print(f"  Grid: {g.get('ni')} x {g.get('nj')} x {g.get('nk')}  type={g.get('grid_type')}")
+    print(f"  PVTO rows: {len(d['fluid'].get('pvto_table',{}).get('rows',[]))}")
+    print(f"  PVDG rows: {len(d['fluid'].get('pvdg_table',{}).get('rows',[]))}")
+    print(f"  SWFN rows: {len(d['rockfluid'].get('swfn_table',{}).get('rows',[]))}")
+    print(f"  Wells: {len(d['wells'])}")
+    print(f"  Sim days: {d.get('_total_sim_time', 0):.1f}")
+    unk = list(d.get("unknown_keywords", {}).keys())
+    if unk:
+        print(f"  Unknown keywords: {unk}")
+    print(f"  JSON: {out}")
 
 
-def _default_output_for_generate(input_path: Path) -> Path:
-    out_dir = Path("outputs/cmg")
+def cmd_parse_cmg(args):
+    src = Path(args.input)
+    out_dir = Path(args.output) if args.output else Path("outputs/json")
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = input_path.stem.replace("_parsed", "")
-    return out_dir / f"{stem}_roundtrip.dat"
+    out = out_dir / f"{src.stem}_parsed.json"
+    d = parse_cmg(src, str(out))
+    g = d["grid"]
+    print(f"parse-cmg OK")
+    print(f"  Grid: {g.get('ni')} x {g.get('nj')} x {g.get('nk')}  type={g.get('grid_type')}")
+    print(f"  PVT rows: {len(d['fluid'].get('pvt_table',{}).get('rows',[]))}")
+    print(f"  Wells: {len(d['wells'])}")
+    print(f"  JSON: {out}")
 
 
-def cmd_parse_cmg(args: argparse.Namespace) -> None:
-    input_path = Path(args.input)
-    output_path = Path(args.output) if args.output else _default_output_for_parse(input_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    parse_cmg(str(input_path), str(output_path))
-    print(f"OK: parsed CMG -> JSON: {output_path}")
+def cmd_generate_cmg(args):
+    src = Path(args.input)
+    out_dir = Path(args.output) if args.output else Path("outputs/cmg")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stem = src.stem.replace("_parsed", "")
+    out = out_dir / f"{stem}_converted.dat"
+    generate_cmg(src, str(out))
+    print(f"generate-cmg OK  ->  {out}")
 
 
-def cmd_generate_cmg(args: argparse.Namespace) -> None:
-    input_path = Path(args.input)
-    output_path = Path(args.output) if args.output else _default_output_for_generate(input_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(input_path, encoding="utf-8") as f:
-        data = json.load(f)
-    generate_cmg(data, output_path)
-    print(f"OK: generated JSON -> CMG: {output_path}")
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="UDA middle layer CLI")
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    p_parse = sub.add_parser("parse-cmg", help="Parse CMG .dat to universal JSON")
-    p_parse.add_argument("input", help="Path to input CMG .dat file")
-    p_parse.add_argument("-o", "--output", help="Output JSON path")
-    p_parse.set_defaults(func=cmd_parse_cmg)
-
-    p_gen = sub.add_parser("generate-cmg", help="Generate CMG .dat from universal JSON")
-    p_gen.add_argument("input", help="Path to input universal JSON file")
-    p_gen.add_argument("-o", "--output", help="Output CMG .dat path")
-    p_gen.set_defaults(func=cmd_generate_cmg)
-
-    return parser
+def cmd_generate_petrel(args):
+    src = Path(args.input)
+    out_dir = Path(args.output) if args.output else Path("outputs/petrel")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stem = src.stem.replace("_parsed", "")
+    out = out_dir / f"{stem}_converted.DATA"
+    generate_petrel(src, str(out))
+    print(f"generate-petrel OK  ->  {out}")
 
 
-def main() -> None:
-    parser = build_parser()
-    args = parser.parse_args()
-    args.func(args)
-
+def main():
+    p = argparse.ArgumentParser(description="UDA Middle Layer — Eclipse <-> CMG")
+    sub = p.add_subparsers(dest="command", required=True)
+    for cmd in ["parse-petrel","parse-cmg","generate-cmg","generate-petrel"]:
+        sp = sub.add_parser(cmd)
+        sp.add_argument("input")
+        sp.add_argument("-o","--output")
+    args = p.parse_args()
+    {
+        "parse-petrel":    cmd_parse_petrel,
+        "parse-cmg":       cmd_parse_cmg,
+        "generate-cmg":    cmd_generate_cmg,
+        "generate-petrel": cmd_generate_petrel,
+    }[args.command](args)
 
 if __name__ == "__main__":
     main()

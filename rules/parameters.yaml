@@ -758,3 +758,224 @@ well_radius:
     unit: m
     format: "inline_col8"    # COMPDAT第8列
   unit_conversion: ft_to_m
+
+
+# =============================================================================
+# 补充一：PVT 表列级换算规则（Eclipse FIELD → CMG FIELD）
+# =============================================================================
+# 以下条目描述 pvto_table + pvdg_table → cmg pvt_table 的逐列换算规则。
+# 换算系数定义在 units.yaml，此处引用。
+
+pvt_column_rs:
+  standard_name: pvt_column_rs
+  chinese_name: 溶解气油比（PVT表RS列）
+  physical_quantity: solution_gor
+  cmg_pvt:
+    column_index: 1         # *PVT 第2列（0-indexed: p, rs, bo, eg, viso, visg）
+    unit: "scf/STB"
+  petrel_pvto:
+    column_index: 0         # PVTO 第1列（rs, p, bo, viso 顺序）
+    unit: "Mscf/STB"
+  unit_conversion: eclipse_rs_to_cmg_rs
+  notes: "从 Eclipse PVTO 转 CMG PVT 时，RS 须乘以 1000（Mscf→scf）"
+
+pvt_column_bg_to_eg:
+  standard_name: pvt_column_bg_to_eg
+  chinese_name: 气体膨胀因子（PVDG Bg → CMG PVT eg列）
+  physical_quantity: gas_expansion_factor
+  cmg_pvt:
+    column_index: 3         # *PVT 第4列（p, rs, bo, eg, viso, visg）
+    unit: "scf/RB"
+    definition: "eg = 1/Bg（膨胀因子）"
+  petrel_pvdg:
+    column_index: 1         # PVDG 第2列（p, bg, visg 顺序）
+    unit: "RB/Mscf"
+    definition: "Bg = 地层体积/地面体积"
+  unit_conversion: eclipse_bg_to_cmg_eg
+  notes: "eg_cmg = 1000.0 / bg_eclipse，不是简单乘以系数"
+
+
+# =============================================================================
+# 补充二：PVTO 欠饱和点处理规则
+# =============================================================================
+
+pvto_undersaturated_rows:
+  standard_name: pvto_undersaturated_rows
+  chinese_name: PVTO 欠饱和点行
+  description: "Eclipse PVTO 中同一 RS 值下的多行数据"
+  eclipse_pvto:
+    support: true
+    format: >
+      同一 RS 下，第一行是饱和点（saturated point），后续行（无新 RS 值）
+      是欠饱和点（undersaturated points），描述高于饱和压力时 Bo 和 viso 的变化。
+    example: |
+      RS=1.270  p=4014.7  bo=1.695  viso=0.510   <- 饱和点（斜杠在下一行前）
+                p=5014.7  bo=1.671  viso=0.549   <- 欠饱和点
+                p=9014.7  bo=1.579  viso=0.740   <- 欠饱和点
+      RS=1.618  p=5014.7  bo=1.827  viso=0.449   <- 下一个饱和点
+    verified_with: "SPE1_ODEHIMPES.DATA + SPE2_CHAP.DATA"
+  cmg_pvt:
+    support: false
+    notes: "CMG *PVT 表不支持欠饱和点，每个压力只对应一个 RS 值"
+  conversion_rule: >
+    Eclipse→CMG 转换时，每个 RS 只保留第一行（最低压力行，即饱和点），
+    丢弃同 RS 下的后续欠饱和行。
+    判断依据：parser 读 PVTO 时，遇到行首无 RS 值的行标记为欠饱和行。
+
+
+# =============================================================================
+# 补充三：CMG 必须显式给出而 Eclipse 不需要的参数
+# =============================================================================
+
+oil_compressibility:
+  standard_name: oil_compressibility
+  chinese_name: 油压缩率
+  data_type: float
+  physical_range: [1.0e-7, 1.0e-4]
+  cmg:
+    keyword: "*CO"
+    block: FLUID
+    unit: "1/psi"
+    required: true
+    format: single_value
+    example: "*CO 1.3687E-5"
+    notes: "CMG 必须显式给出，即使已有 *PVT 表也不能省略"
+  petrel:
+    keyword: null
+    required: false
+    notes: "Eclipse 无此关键字，从 PVTO 表内部隐式推导，无需显式给出"
+  unit_conversion: null
+  estimation_rule: >
+    当源文件（Eclipse）无此值时，从 PVTO 饱和点估算：
+      1. 取所有饱和点（每个RS的第一行），按压力排序
+      2. co ≈ (Bo2 - Bo1) / (Bo1 × (p2 - p1))，取最高两个压力点计算
+      3. 最小值截断为 1.0e-7 /psi，防止出现负值或极小值
+    参考值：SPE1=1.3687E-5, SPE2=1.0E-5, SPE5=2.185E-5（均为 1/psi）
+  verified_with: "mxspe001.dat, mxspe002.dat, mxspe005.dat"
+
+oil_viscosity_coeff:
+  standard_name: oil_viscosity_coeff
+  chinese_name: 油粘度压力系数
+  data_type: float
+  cmg:
+    keyword: "*CVO"
+    block: FLUID
+    unit: "1/psi"
+    required: true
+    default_value: 0.0
+    format: single_value
+    example: "*CVO 0.0"
+    notes: "CMG 必须显式给出，Eclipse 来源时无对应值，写默认值 0.0"
+  petrel:
+    keyword: null
+    required: false
+  unit_conversion: null
+  notes: "SPE1 CVO=4.6E-5，SPE2 CVO=0.0，SPE5 CVO=2.55E-5。无 Eclipse 来源时默认 0.0"
+
+
+# =============================================================================
+# 补充四：*PB 泡点压力初始化规则
+# =============================================================================
+
+bubble_point_initial:
+  standard_name: bubble_point_initial
+  chinese_name: 初始泡点压力（INITIAL段）
+  data_type: float_or_array
+  cmg:
+    keyword: "*PB"
+    block: INITIAL
+    unit: psia
+    required: true
+    format: "CON_or_KVAR"
+    example: "*PB *CON 4014.7"
+    notes: "CMG INITIAL 段必须给出 *PB，Eclipse 从 EQUIL+RSVD 自动初始化"
+  petrel:
+    keyword: null
+    required: false
+    initialization: "Eclipse 通过 EQUIL + RSVD（可选）隐式初始化泡点"
+  derivation_rule:
+    priority_1:
+      condition: "JSON initial.bubble_point_pressure 已有值（CMG 来源）"
+      action: "直接输出，无需推导"
+    priority_2:
+      condition: "有 RSVD 表"
+      action: >
+        取 RSVD 表中最大 RS 值，在 PVTO 饱和点表中找对应的饱和压力，
+        即为初始最大泡点压力，写 *PB *CON <该压力>
+      example: "SPE1: RSVD RS=1.270 → PVTO 中 RS=1.270 的饱和压力=4014.7 → *PB *CON 4014.7"
+      verified_with: "SPE1_ODEHIMPES.DATA + mxspe001.dat"
+    priority_3:
+      condition: "无 RSVD 表，且 EQUIL 中 GOC == ref_depth（GOC 与基准深度相同，表示无气顶）"
+      action: "写 *PB *CON 0.0（无初始游离气，油处于欠饱和状态）"
+      example: "SPE2: EQUIL GOC=9035=ref_depth=9035 → *PB *CON 0.0"
+      verified_with: "SPE2_CHAP.DATA + mxspe002.dat"
+    priority_4:
+      condition: "其他情况"
+      action: "写 *PB *CON 0.0 并添加警告注释"
+  unit_conversion: null
+
+
+# =============================================================================
+# 补充五：径向网格的 PERMJ 缺失处理
+# =============================================================================
+
+radial_perm_j_rule:
+  standard_name: radial_perm_j_rule
+  chinese_name: 径向网格切向渗透率规则
+  description: "径向（RADIAL）网格中 PERMJ（切向渗透率）的处理"
+  eclipse:
+    radial_keywords: ["PERMR", "PERMZ"]
+    note: "Eclipse 径向网格只需 PERMR（径向）和 PERMZ（垂向），无 PERMY/PERMJ"
+    example: "SPE2: 只有 PERMR，无 PERMY"
+  cmg:
+    radial_keywords: ["*PERMI", "*PERMJ", "*PERMK"]
+    note: "CMG 径向网格 *PERMI=径向，*PERMJ=切向，*PERMK=垂向，三者都需给出"
+  conversion_rule: >
+    Eclipse→CMG 径向网格转换时：
+      PERMR → *PERMI（径向渗透率）
+      缺失的 PERMJ → 用 *PERMI 的值填充（切向渗透率=径向渗透率，各向同性假设）
+      PERMZ → *PERMK（垂向渗透率）
+  physical_basis: "均质储层切向渗透率等于径向渗透率，这是径向模型的标准假设"
+  verified_with: "SPE2_CHAP.DATA + mxspe002.dat"
+
+
+# =============================================================================
+# 补充六：K 层顺序约定（引用 units.yaml 中的详细定义）
+# =============================================================================
+
+k_layer_ordering:
+  standard_name: k_layer_ordering
+  chinese_name: K 层顺序约定
+  description: "Eclipse 与 CMG 的 K 层方向约定差异"
+  unit_conversion_ref: "eclipse_to_cmg_kvar_conversion（见 units.yaml）"
+  eclipse:
+    k1_position: top
+    kvar_order: "top_to_bottom（固定）"
+  cmg_default:
+    k1_position: bottom
+    kvar_order: "bottom_to_top"
+    cmg_keyword: null
+  cmg_kdir_down:
+    k1_position: top
+    kvar_order: "top_to_bottom"
+    cmg_keyword: "*KDIR *DOWN"
+  affects_fields: ["dk", "perm_i", "perm_j", "perm_k", "porosity", "ntg"]
+  affects_depth: true
+  depth_conversion_ref: "eclipse_tops_to_cmg_depth_default（见 units.yaml）"
+
+
+# =============================================================================
+# 补充七：TOPS → *DEPTH 的字段映射（引用 units.yaml 中的公式）
+# =============================================================================
+
+tops_to_depth_mapping:
+  standard_name: tops_to_depth_mapping
+  chinese_name: TOPS 到 CMG DEPTH 的映射
+  eclipse_field: "TOPS（GRID段，K=1顶层的顶面深度数组）"
+  cmg_field: "*DEPTH i j k v（指定单个网格块的中心深度）"
+  conversion_rule_ref: "eclipse_tops_to_cmg_depth_default（见 units.yaml）"
+  notes: >
+    Eclipse TOPS 通常是一个全网格数组（每个格子的顶面深度），
+    CMG *DEPTH 只取一个参考点。转换时取 i=1,j=1,k=1 网格块
+    （CMG K=1 即 Eclipse 最底层）的中心深度作为参考点。
+  verified_with: "SPE1: TOPS=8325, DK=[20,30,50] → *DEPTH 1 1 1 8400.0 ✓"

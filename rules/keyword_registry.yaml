@@ -1,0 +1,430 @@
+# =============================================================================
+# keyword_registry.yaml
+# 机器可读的关键字分发表 — Parser 和 Generator 在启动时读取此文件
+# 新增简单关键字：只需在此添加一行，无需改任何 Python 代码
+# =============================================================================
+#
+# format 类型说明（Petrel）：
+#   flag        - 关键字本身就是信息，无参数（OIL, GAS, RADIAL）
+#   skip_slash  - 消耗直到下一个 / 或关键字（忽略内容）
+#   array       - N*val 展开，直到 /，存为 scalar 或 array
+#   scalar      - 单值，到 /
+#   table       - 多行，每行数据 + /，整表以空 / 或关键字终止
+#   dimens      - 特殊：读3个整数存 ni/nj/nk
+#   custom      - 由 handler 指定的专属方法
+#
+# format 类型说明（CMG）：
+#   array       - 带 *CON/*KVAR 等修饰词
+#   scalar_inline - 同行单值
+#   grid_header - *GRID type ni nj nk
+#   depth       - i j k value
+#   pvt6        - 6列 PVT 表
+#   density_typed - *DENSITY *OIL/*GAS/*WATER value
+#   rpt_table   - 相渗表
+#   skip_int    - 消耗后面的整数（*RPT）
+#   skip_modifiers - 消耗非*关键字的修饰词
+#   custom      - 专属方法
+# =============================================================================
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Petrel / Eclipse 关键字表
+# ─────────────────────────────────────────────────────────────────────────────
+petrel:
+
+  # 段名（仅标记当前段，无数据）
+  sections:
+    - RUNSPEC
+    - GRID
+    - EDIT
+    - PROPS
+    - REGIONS
+    - SOLUTION
+    - SUMMARY
+    - SCHEDULE
+
+  # 单位制标志（更新 meta.unit_system）
+  unit_flags:
+    - FIELD
+    - METRIC
+    - LAB
+    - SI
+
+  # 开始日期
+  # START 关键字格式：DD 'MON' YYYY /
+  start_keywords:
+    - START
+
+  keywords:
+
+    # ── 纯标志（无参数，无 /）────────────────────────────────────────────────
+    OIL:     {format: flag, json: {section: meta, key: fluid_oil},    value: true}
+    WATER:   {format: flag, json: {section: meta, key: fluid_water},  value: true}
+    GAS:     {format: flag, json: {section: meta, key: fluid_gas},    value: true}
+    DISGAS:  {format: flag, json: {section: meta, key: fluid_disgas}, value: true}
+    VAPOIL:  {format: flag, json: {section: meta, key: fluid_vapoil}, value: true}
+    RADIAL:  {format: flag, json: {section: grid, key: grid_type},    value: RADIAL}
+    FMTOUT:  {format: flag, json: {section: meta, key: fmtout},       value: true}
+    FMTIN:   {format: flag, json: {section: meta, key: fmtin},        value: true}
+    UNIFOUT: {format: flag, json: {section: meta, key: unifout},      value: true}
+    UNIFIN:  {format: flag, json: {section: meta, key: unifin},       value: true}
+    NONNC:   {format: flag, json: {section: meta, key: nonnc},        value: true}
+
+    # ── 跳到斜杠（忽略内容）────────────────────────────────────────────────
+    WELLDIMS:  {format: skip_slash}
+    TABDIMS:   {format: skip_slash}
+    EQLDIMS:   {format: skip_slash}
+    PIMTDIMS:  {format: skip_slash}
+    AQUDIMS:   {format: skip_slash}
+    REGDIMS:   {format: skip_slash}
+    VFPPDIMS:  {format: skip_slash}
+    GRUPDIMS:  {format: skip_slash}
+    NUPCOL:    {format: skip_slash}
+    NUPCOIL:   {format: skip_slash}
+    NSTACK:    {format: skip_slash}
+    TUNING:    {format: custom, handler: _parse_tuning}
+    DRSDT:     {format: skip_slash}
+    RPTSCHED:  {format: skip_slash}
+    RPTGRID:   {format: skip_slash}
+    RPTPROPS:  {format: skip_slash}
+    RPTSOL:    {format: skip_slash}
+    RPTSUM:    {format: skip_slash}
+    RPTRST:    {format: skip_slash}
+    RPTSMRY:   {format: skip_slash}
+    DEBUG:     {format: skip_slash}
+    COLUMNS:   {format: skip_slash}
+    RPTREGS:   {format: skip_slash}
+    FIPNUM:    {format: skip_slash}
+    SATNUM:    {format: skip_slash}
+    PVTNUM:    {format: skip_slash}
+    EQLNUM:    {format: skip_slash}
+    FLUXNUM:   {format: skip_slash}
+    MULTPV:    {format: skip_slash}
+    MSUMLINS:  {format: flag, json: {section: meta, key: _dummy}, value: null}
+    MSUMNEWT:  {format: flag, json: {section: meta, key: _dummy}, value: null}
+    MSUMLINES: {format: flag, json: {section: meta, key: _dummy}, value: null}
+    SEPARATE:  {format: flag, json: {section: meta, key: _dummy}, value: null}
+    IMPLICIT:  {format: flag, json: {section: meta, key: _dummy}, value: null}
+    NUPCOL:    {format: skip_slash}
+    REGDIMS:   {format: skip_slash}
+    PIMTDIMS:  {format: skip_slash}
+    TITLE:     {format: custom, handler: _parse_title}
+    IMPES:     {format: skip_slash}
+    # SUMMARY 报告关键字（有些后接数据+/，统一用 skip_slash）
+    WGOR:      {format: skip_slash}
+    WBHP:      {format: skip_slash}
+    WOPR:      {format: skip_slash}
+    WWPR:      {format: skip_slash}
+    WGPR:      {format: skip_slash}
+    WOIR:      {format: skip_slash}
+    WWIR:      {format: skip_slash}
+    WGIR:      {format: skip_slash}
+    BGSAT:     {format: skip_slash}
+    FOPR:      {format: skip_slash}
+    BOSAT:     {format: skip_slash}
+    BPR:       {format: skip_slash}
+    INIT:      {format: flag, json: {section: meta, key: _dummy}, value: null}
+    SAVE:      {format: flag, json: {section: meta, key: _dummy}, value: null}
+    RUNSUM:    {format: flag, json: {section: meta, key: _dummy}, value: null}
+    ALL:       {format: flag, json: {section: meta, key: _dummy}, value: null}
+
+    # ── 特殊：网格维度 ────────────────────────────────────────────────────
+    DIMENS:  {format: dimens}
+
+    # ── 网格标量 ──────────────────────────────────────────────────────────
+    INRAD:   {format: scalar, json: {section: grid, key: inrad},    unit: ft}
+
+    # ── 网格数组 ──────────────────────────────────────────────────────────
+    DX:      {format: array,  json: {section: grid, key: di},       unit: ft}
+    DY:      {format: array,  json: {section: grid, key: dj},       unit: ft}
+    DZ:      {format: array,  json: {section: grid, key: dk},       unit: ft}
+    DRV:     {format: array,  json: {section: grid, key: drv},      unit: ft}
+    DTHETA:  {format: array,  json: {section: grid, key: dtheta},   unit: deg}
+    TOPS:    {format: array,  json: {section: grid, key: tops_ref}, unit: ft}
+
+    # ── 储层属性数组 ──────────────────────────────────────────────────────
+    PORO:    {format: array,  json: {section: reservoir, key: porosity}, unit: fraction}
+    PERMX:   {format: array,  json: {section: reservoir, key: perm_i},  unit: md}
+    PERMY:   {format: array,  json: {section: reservoir, key: perm_j},  unit: md}
+    PERMZ:   {format: array,  json: {section: reservoir, key: perm_k},  unit: md}
+    NTG:     {format: array,  json: {section: reservoir, key: ntg},     unit: fraction}
+
+    # ── 特殊数组操作 ─────────────────────────────────────────────────────
+    EQUALS:   {format: custom, handler: _parse_equals}
+    COPY:     {format: custom, handler: _parse_copy}
+    MULTIPLY: {format: custom, handler: _parse_multiply}
+
+    # ── 流体 PVT ─────────────────────────────────────────────────────────
+    # ── 径向网格专用 ─────────────────────────────────────────────────────
+    PERMR:   {format: array,  json: {section: reservoir, key: perm_i},  unit: md,
+              notes: "径向渗透率，等价于笛卡尔网格的 PERMX，存入 perm_i"}
+    PERMZ:   {format: array,  json: {section: reservoir, key: perm_k},  unit: md,
+              notes: "垂向渗透率，等价于笛卡尔网格的 PERMZ，存入 perm_k"}
+    DTHETA:  {format: array,  json: {section: grid, key: dtheta},       unit: deg,
+              notes: "角度方向网格尺寸，径向网格专用"}
+
+    # ── 模拟时间 ──────────────────────────────────────────────────────────
+    TSTEP:   {format: custom, handler: _parse_tstep,
+              notes: "时间步长列表，累加至 meta._total_sim_time，各步存入 meta.tsteps"}
+    START:   {format: custom, handler: _parse_start,
+              notes: "模拟开始日期，格式：DD MON YYYY /，存入 meta.start_date"}
+
+    # ── 动态数据 ──────────────────────────────────────────────────────────
+    WELSPECS:  {format: custom, handler: _parse_welspecs}
+    WCONPROD:  {format: custom, handler: _parse_wconprod}
+    WCONINJE:  {format: custom, handler: _parse_wconinje}
+    WELTARG:   {format: custom, handler: _parse_weltarg,
+                notes: "修改在线井的目标值，格式：WELL TARGET VALUE /，存入 alter_schedule"}
+    COMPDAT:   {format: custom, handler: _parse_compdat}
+
+    # ── PVT ──────────────────────────────────────────────────────────────
+    PVTO:    {format: custom, handler: _parse_pvto}
+    PVDG:    {format: custom, handler: _parse_pvdg}
+    PVDO:    {format: table,  json: {section: fluid, key: pvdo_table},  columns: [p, bo, viso],       ncols: 3}
+    PVTW:    {format: custom, handler: _parse_pvtw}
+    DENSITY: {format: custom, handler: _parse_density}
+    ROCK:    {format: custom, handler: _parse_rock}
+
+    # ── 相对渗透率（table格式：每行带/，表格以空/或关键字结束）────────────
+    SWOF:    {format: table,  json: {section: rockfluid, key: swof_table}, columns: [sw, krw, krow, pcow], ncols: 4}
+    SGOF:    {format: table,  json: {section: rockfluid, key: sgof_table}, columns: [sg, krg, krog, pcog], ncols: 4}
+    SWFN:    {format: table,  json: {section: rockfluid, key: swfn_table}, columns: [sw, krw, pcow],       ncols: 3}
+    SGFN:    {format: table,  json: {section: rockfluid, key: sgfn_table}, columns: [sg, krg, pcog],       ncols: 3}
+    SOF3:    {format: table,  json: {section: rockfluid, key: sof3_table}, columns: [so, krow, krog],      ncols: 3}
+    SOF2:    {format: table,  json: {section: rockfluid, key: sof2_table}, columns: [so, krow],            ncols: 2}
+
+    # ── 初始条件 ──────────────────────────────────────────────────────────
+    EQUIL:   {format: custom, handler: _parse_equil}
+    RSVD:    {format: custom, handler: _parse_rsvd}
+    PBVD:    {format: table,  json: {section: initial, key: pbvd_table},   columns: [depth, pb],           ncols: 2}
+
+    # ── 时间与日期 ────────────────────────────────────────────────────────
+    START:   {format: custom, handler: _parse_start}
+    TSTEP:   {format: custom, handler: _parse_tstep}
+    DATES:   {format: custom, handler: _parse_dates}
+
+    # ── 井 ────────────────────────────────────────────────────────────────
+    WELSPECS:  {format: custom, handler: _parse_welspecs}
+    COMPDAT:   {format: custom, handler: _parse_compdat}
+    WCONPROD:  {format: custom, handler: _parse_wconprod}
+    WCONINJE:  {format: custom, handler: _parse_wconinje}
+    WELTARG:   {format: custom, handler: _parse_weltarg}
+    WCONHIST:  {format: skip_slash}
+    WINJGAS:   {format: skip_slash}
+    GCONPROD:  {format: skip_slash}
+    GCONINJE:  {format: skip_slash}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CMG IMEX 关键字表
+# ─────────────────────────────────────────────────────────────────────────────
+cmg:
+
+  # 纯忽略关键字（消耗到下一个 * 关键字）
+  ignore_keywords:
+    - "*VERTICAL"
+    - "*BLOCK_CENTER"
+    - "*WATER_OIL_GAS"
+    - "*USER_INPUT"
+    - "*MODEL"
+    - "*ROCKFLUID"
+    - "*NUMERICAL"
+    - "*INITIAL"
+    - "*RUN"
+    - "*STOP"
+    - "*RESULTS"
+    - "*SIMULATOR"
+    - "*TITLE1"
+    - "*TITLE2"
+    - "*TITLE3"
+    - "*WPRN"
+    - "*OUTPRN"
+    - "*WSRF"
+    - "*OUTSRF"
+    - "*WBFLAG"
+    - "*REWIND"
+    - "*NOGEOMAVG"
+    - "*NOLIST"
+    - "*NEWTONCYC"
+
+  keywords:
+
+    # ── 网格 ──────────────────────────────────────────────────────────────
+    "*GRID":      {format: grid_header}
+    "*DI":        {format: array,         json: {section: grid, key: di},       unit: ft}
+    "*DJ":        {format: array,         json: {section: grid, key: dj},       unit: ft}
+    "*DK":        {format: array,         json: {section: grid, key: dk},       unit: ft}
+    "*DEPTH":     {format: depth}
+    "*KDIR":      {format: custom, handler: _parse_kdir,
+                   notes: "K层方向约定。*KDIR *DOWN 表示 K=1为顶层（同Eclipse），存入 grid.kdir"}
+    "*DTOP":      {format: array,         json: {section: grid, key: tops_ref}, unit: ft}
+    "*RW":        {format: scalar_inline, json: {section: grid, key: inrad},    unit: ft}
+    "*PAYDEPTH":  {format: array,         json: {section: grid, key: paydepth}, unit: ft}
+    "*DIP":       {format: custom, handler: _parse_dip,
+                   notes: "储层倾角，格式：*DIP dip_i dip_j，存入 grid.dip_i 和 grid.dip_j"}
+    "*KDIR":      {format: custom, handler: _parse_kdir,
+                   notes: "K层方向。*KDIR *DOWN = K=1为顶层（见 units.yaml: k_layer_ordering）"}
+
+    # ── 储层 ──────────────────────────────────────────────────────────────
+    "*POR":       {format: array,         json: {section: reservoir, key: porosity},             unit: fraction}
+    "*PERMI":     {format: array,         json: {section: reservoir, key: perm_i},               unit: md}
+    "*PERMJ":     {format: array,         json: {section: reservoir, key: perm_j},               unit: md}
+    "*PERMK":     {format: array,         json: {section: reservoir, key: perm_k},               unit: md}
+    "*CPOR":      {format: scalar_inline, json: {section: reservoir, key: rock_compressibility}, unit: "1/psi"}
+    "*PRPOR":     {format: scalar_inline, json: {section: reservoir, key: rock_ref_pressure},    unit: psia}
+    "*NET2GROSS": {format: array,         json: {section: reservoir, key: ntg},                  unit: fraction}
+
+    # ── 流体 ──────────────────────────────────────────────────────────────
+    "*PVT":     {format: pvt6}
+    "*DENSITY": {format: density_typed}
+    "*BWI":     {format: scalar_inline, json: {section: fluid, key: water_fvf},             unit: "RB/STB"}
+    "*CW":      {format: scalar_inline, json: {section: fluid, key: water_compressibility}, unit: "1/psi"}
+    "*REFPW":   {format: scalar_inline, json: {section: fluid, key: water_ref_pressure},    unit: psia}
+    "*VWI":     {format: scalar_inline, json: {section: fluid, key: water_viscosity},       unit: cp}
+    "*CVW":     {format: scalar_inline, json: {section: fluid, key: water_viscosity_coeff}, unit: "1/psi"}
+    "*CO":      {format: scalar_inline, json: {section: fluid, key: oil_compressibility},   unit: "1/psi"}
+    "*CVO":     {format: scalar_inline, json: {section: fluid, key: oil_viscosity_coeff},   unit: "1/psi"}
+
+    # ── 相渗 ──────────────────────────────────────────────────────────────
+    "*RPT":   {format: skip_int}
+    "*SWT":   {format: rpt_table, json: {section: rockfluid, key: swt_table}, columns: [sw, krw, krow, pcow]}
+    "*SLT":   {format: rpt_table, json: {section: rockfluid, key: slt_table}, columns: [sl, krg, krog, pcog]}
+    "*SGT":   {format: rpt_table, json: {section: rockfluid, key: sgt_table}, columns: [sg, krg, pcog]}
+
+    # ── 初始条件 ──────────────────────────────────────────────────────────
+    "*REFDEPTH": {format: scalar_inline, json: {section: initial, key: ref_depth},                       unit: ft}
+    "*REFPRES":  {format: scalar_inline, json: {section: initial, key: ref_pressure},                    unit: psia}
+    "*DWOC":     {format: scalar_inline, json: {section: initial, key: woc_depth},                       unit: ft}
+    "*DGOC":     {format: scalar_inline, json: {section: initial, key: goc_depth},                       unit: ft}
+    "*PB":       {format: array,         json: {section: initial, key: bubble_point_pressure},           unit: psia}
+    "*PBS":      {format: array,         json: {section: initial, key: solvent_bubble_point_pressure},   unit: psia}
+    "*SW":       {format: array,         json: {section: initial, key: water_saturation},                unit: fraction}
+    "*SO":       {format: array,         json: {section: initial, key: oil_saturation},                  unit: fraction}
+    "*SG":       {format: array,         json: {section: initial, key: gas_saturation},                  unit: fraction}
+    "*PRES":     {format: array,         json: {section: initial, key: pressure},                        unit: psia}
+
+    # ── 数值控制 ──────────────────────────────────────────────────────────
+    "*DTMAX":     {format: scalar_inline, json: {section: numerical, key: max_timestep},  unit: day}
+    "*DTMIN":     {format: scalar_inline, json: {section: numerical, key: min_timestep},  unit: day}
+    "*MAXSTEPS":  {format: scalar_inline, json: {section: numerical, key: max_steps},     unit: null}
+    "*NORM":      {format: skip_modifiers}
+    "*AIM":       {format: skip_modifiers}
+
+    # ── I/O 控制 ──────────────────────────────────────────────────────────
+    "*INUNIT":   {format: custom, handler: _parse_inunit}
+
+    # ── 动态数据（自定义处理器）──────────────────────────────────────────
+    "*WELL":     {format: custom, handler: _parse_well}
+    "*PRODUCER": {format: custom, handler: _parse_producer}
+    "*INJECTOR": {format: custom, handler: _parse_injector}
+    "*INCOMP":   {format: custom, handler: _parse_incomp}
+    "*OPERATE":  {format: custom, handler: _parse_operate}
+    "*MONITOR":  {format: skip_modifiers}
+    "*PERF":     {format: custom, handler: _parse_perf}
+    "*PERFV":    {format: custom, handler: _parse_perfv}
+    "*GEOMETRY": {format: custom, handler: _parse_geometry}
+    "*ALTER":    {format: custom, handler: _parse_alter}
+    "*TIME":     {format: custom, handler: _parse_time}
+    "*DATE":     {format: custom, handler: _parse_date}
+    "*DTWELL":   {format: scalar_inline, json: {section: meta, key: dtwell}, unit: day}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 生成器配置
+# 每个 JSON 字段 → 输出关键字 + 格式
+# ─────────────────────────────────────────────────────────────────────────────
+generators:
+
+  cmg:
+    grid:
+      # grid_header 由专属方法处理
+      # K层顺序：当前实现使用 strategy_B（见 units.yaml: eclipse_to_cmg_kvar_conversion）
+      # dk/perm_i/perm_j/perm_k/porosity/ntg 的 KVAR 数组在 Eclipse→CMG 时需 reverse
+      di:       {keyword: "*DI",   format: array}
+      dj:       {keyword: "*DJ",   format: array}
+      dk:       {keyword: "*DK",   format: array,  kvar_reverse: true}
+      inrad:    {keyword: "*RW",   format: scalar_inline}
+      tops_ref: {keyword: null,    format: depth_from_tops}
+      # depth_from_tops 使用公式：TOPS + sum(DK_all) - DK[nk-1]/2
+      # 见 units.yaml: eclipse_tops_to_cmg_depth_default
+      depth_ref_block: {keyword: "*DEPTH", format: depth_block}
+
+    reservoir:
+      # kvar_reverse: true 表示 Eclipse→CMG 时此字段的 KVAR 数组需 reverse
+      # 见 units.yaml: eclipse_to_cmg_kvar_conversion, strategy_B
+      porosity:             {keyword: "*POR",        format: array,  kvar_reverse: true}
+      perm_i:               {keyword: "*PERMI",      format: array,  kvar_reverse: true}
+      perm_j:               {keyword: "*PERMJ",      format: array,  kvar_reverse: true,
+                             radial_fallback: perm_i,
+                             radial_fallback_note: "径向网格缺失时用 perm_i 填充，见 parameters.yaml: radial_perm_j_rule"}
+      perm_k:               {keyword: "*PERMK",      format: array,  kvar_reverse: true}
+      rock_compressibility: {keyword: "*CPOR",       format: scalar_inline}
+      rock_ref_pressure:    {keyword: "*PRPOR",      format: scalar_inline}
+      ntg:                  {keyword: "*NET2GROSS",  format: array,  kvar_reverse: true}
+
+    fluid:
+      # pvt_table 的列换算规则见 units.yaml: eclipse_rs_to_cmg_rs / eclipse_bg_to_cmg_eg
+      # 欠饱和点丢弃规则见 parameters.yaml: pvto_undersaturated_rows
+      pvt_table:             {keyword: "*PVT",            format: pvt6}
+      oil_density:           {keyword: "*DENSITY *OIL",   format: scalar_inline}
+      gas_density:           {keyword: "*DENSITY *GAS",   format: scalar_inline}
+      water_density:         {keyword: "*DENSITY *WATER", format: scalar_inline}
+      water_fvf:             {keyword: "*BWI",   format: scalar_inline}
+      water_compressibility: {keyword: "*CW",    format: scalar_inline}
+      water_ref_pressure:    {keyword: "*REFPW", format: scalar_inline}
+      water_viscosity:       {keyword: "*VWI",   format: scalar_inline}
+      water_viscosity_coeff: {keyword: "*CVW",   format: scalar_inline}
+      # *CO 和 *CVO 是 CMG 必须字段，Eclipse 来源时无对应值，需估算或使用默认值
+      # 见 parameters.yaml: oil_compressibility / oil_viscosity_coeff
+      oil_compressibility:   {keyword: "*CO",    format: scalar_inline, required: true,
+                              estimation: "from_pvto_sat_points"}
+      oil_viscosity_coeff:   {keyword: "*CVO",   format: scalar_inline, required: true,
+                              default_value: 0.0}
+
+    rockfluid:
+      swt_table: {keyword: "*SWT", format: rpt_table}
+      slt_table: {keyword: "*SLT", format: rpt_table}
+
+    initial:
+      ref_pressure: {keyword: "*REFPRES",  format: scalar_inline}
+      ref_depth:    {keyword: "*REFDEPTH", format: scalar_inline}
+      woc_depth:    {keyword: "*DWOC",     format: scalar_inline}
+      goc_depth:    {keyword: "*DGOC",     format: scalar_inline}
+      # *PB 是 CMG 必须字段，Eclipse 来源时需从 RSVD+PVTO 推导
+      # 推导规则见 parameters.yaml: bubble_point_initial
+      bubble_point_pressure: {keyword: "*PB", format: array, required: true,
+                              derivation: "from_rsvd_pvto"}
+
+    numerical:
+      max_timestep: {keyword: "*DTMAX",    format: scalar_inline}
+      max_steps:    {keyword: "*MAXSTEPS", format: scalar_inline}
+
+  petrel:
+    grid:
+      di:       {keyword: DX,   format: array}
+      dj:       {keyword: DY,   format: array}
+      dk:       {keyword: DZ,   format: array}
+      tops_ref: {keyword: TOPS, format: array}
+
+    reservoir:
+      porosity: {keyword: PORO,  format: array}
+      perm_i:   {keyword: PERMX, format: array}
+      perm_j:   {keyword: PERMY, format: array}
+      perm_k:   {keyword: PERMZ, format: array}
+
+    fluid:
+      # PVTO/PVDG/PVTW 由专属方法处理
+
+    rockfluid:
+      swof_table: {keyword: SWOF, format: table_slash, columns: [sw, krw, krow, pcow]}
+      sgof_table: {keyword: SGOF, format: table_slash, columns: [sg, krg, krog, pcog]}
+      swfn_table: {keyword: SWFN, format: table_slash, columns: [sw, krw, pcow]}
+      sgfn_table: {keyword: SGFN, format: table_slash, columns: [sg, krg, pcog]}
+      sof3_table: {keyword: SOF3, format: table_slash, columns: [so, krow, krog]}
+      swt_table:  {keyword: SWOF, format: table_slash, columns: [sw, krw, krow, pcow]}
+      slt_table:  {keyword: SGOF, format: table_slash, columns: [sg, krg, krog, pcog]}
+
+    initial:
+      # EQUIL 由专属方法处理
+
+    numerical:
+      max_timestep: {keyword: TSMAXZ, format: scalar_slash}
