@@ -12,6 +12,7 @@ from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.rule_loader import get_loader
+from utils.reporting import write_report_bundle
 
 # ── 格式化工具 ────────────────────────────────────────────────────────────────
 
@@ -506,7 +507,8 @@ class PetrelGenerator:
 
 # ── 对外接口 ──────────────────────────────────────────────────────────────────
 
-def generate_petrel(data_or_json, output_file=None):
+def generate_petrel(data_or_json, output_file=None, report_dir="outputs/reports/generators"):
+    source_name = str(data_or_json) if isinstance(data_or_json, (str, Path)) else "in_memory_json"
     if isinstance(data_or_json, (str, Path)):
         with open(data_or_json, encoding="utf-8") as f:
             data = json.load(f)
@@ -525,10 +527,39 @@ def generate_petrel(data_or_json, output_file=None):
 
     content = PetrelGenerator().generate(data)
 
+    out_path = None
     if output_file:
-        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-        with open(output_file, "w", encoding="utf-8") as f:
+        out_path = Path(output_file)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as f:
             f.write(content)
+
+    warnings = []
+    if not data.get("wells"):
+        warnings.append("未发现井数据，SCHEDULE 可能只有静态段")
+
+    summary = [
+        ("输出文件", str(out_path) if out_path else "(未写盘)"),
+        ("行数", len(content.splitlines())),
+        ("井数量", len(data.get("wells", []))),
+        ("网格类型", data.get("grid", {}).get("grid_type", "CART")),
+    ]
+    md_path, json_path = write_report_bundle(
+        report_dir=report_dir,
+        source_name=Path(source_name).name,
+        report_type="generate_petrel",
+        title="Petrel 生成报告",
+        summary_items=summary,
+        warnings=warnings,
+        errors=[],
+        details={
+            "has_swof": bool(data.get("rockfluid", {}).get("swof_table")),
+            "has_sgof": bool(data.get("rockfluid", {}).get("sgof_table")),
+            "has_swt": bool(data.get("rockfluid", {}).get("swt_table")),
+            "has_slt": bool(data.get("rockfluid", {}).get("slt_table")),
+        },
+    )
+    data.setdefault("_generate_report", {"md": str(md_path), "json": str(json_path)})
 
     return content
 

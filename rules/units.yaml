@@ -1,399 +1,90 @@
 # =============================================================================
-# units.yaml  —  单位换算规则 & 坐标约定
-# =============================================================================
-# 覆盖范围：
-#   1. CMG FIELD  ↔  Petrel METRIC   数值换算（有 factor）
-#   2. Eclipse FIELD → CMG FIELD     PVT列内部换算（同名单位体系，但量纲不同）
-#   3. K层顺序约定差异               （非数值换算，是格式规则）
-#   4. TOPS → *DEPTH                 几何换算公式
-#
-# factor 字段说明：
-#   数值   — 直接乘以 factor
-#   null   — 非线性或需要公式，见 formula 字段
-# =============================================================================
-
-
-# =============================================================================
-# 一、压力
+# units.yaml
+# 仅声明：纯数值换算规则
 # =============================================================================
 
 psi_to_bara:
-  physical_quantity: pressure
   from_unit: psia
   to_unit: bara
   factor: 0.0689476
   formula: "value_bara = value_psia * 0.0689476"
-  inverse: bara_to_psi
 
 bara_to_psi:
-  physical_quantity: pressure
   from_unit: bara
   to_unit: psia
   factor: 14.5038
   formula: "value_psia = value_bara * 14.5038"
-  inverse: psi_to_bara
-
-psi_to_mpa:
-  physical_quantity: pressure
-  from_unit: psia
-  to_unit: MPa
-  factor: 0.00689476
-  formula: "value_mpa = value_psia * 0.00689476"
-  inverse: mpa_to_psi
-
-mpa_to_psi:
-  physical_quantity: pressure
-  from_unit: MPa
-  to_unit: psia
-  factor: 145.038
-  formula: "value_psia = value_mpa * 145.038"
-  inverse: psi_to_mpa
-
-
-# =============================================================================
-# 二、压缩系数（1/压力）
-# =============================================================================
-
-per_psi_to_per_bara:
-  physical_quantity: compressibility
-  from_unit: "1/psi"
-  to_unit: "1/bara"
-  factor: 14.5038
-  formula: "value_per_bara = value_per_psi * 14.5038"
-  inverse: per_bara_to_per_psi
-
-per_bara_to_per_psi:
-  physical_quantity: compressibility
-  from_unit: "1/bara"
-  to_unit: "1/psi"
-  factor: 0.0689476
-  formula: "value_per_psi = value_per_bara * 0.0689476"
-  inverse: per_psi_to_per_bara
-
-
-# =============================================================================
-# 三、长度 / 深度
-# =============================================================================
 
 ft_to_m:
-  physical_quantity: length
   from_unit: ft
   to_unit: m
   factor: 0.3048
   formula: "value_m = value_ft * 0.3048"
-  inverse: m_to_ft
 
 m_to_ft:
-  physical_quantity: length
   from_unit: m
   to_unit: ft
   factor: 3.28084
   formula: "value_ft = value_m * 3.28084"
-  inverse: ft_to_m
 
+per_psi_to_per_bara:
+  from_unit: "1/psi"
+  to_unit: "1/bara"
+  factor: 14.5038
+  formula: "value_per_bara = value_per_psi * 14.5038"
 
-# =============================================================================
-# 四、渗透率
-# =============================================================================
-
-md_to_md:
-  physical_quantity: permeability
-  from_unit: md
-  to_unit: md
-  factor: 1.0
-  notes: "CMG 和 Petrel 均使用 md，无需换算"
-
-
-# =============================================================================
-# 五、密度（地面条件）
-# =============================================================================
+per_bara_to_per_psi:
+  from_unit: "1/bara"
+  to_unit: "1/psi"
+  factor: 0.0689476
+  formula: "value_per_psi = value_per_bara * 0.0689476"
 
 lbft3_to_kgm3:
-  physical_quantity: density
   from_unit: "lb/ft3"
   to_unit: "kg/m3"
   factor: 16.0185
   formula: "value_kgm3 = value_lbft3 * 16.0185"
-  inverse: kgm3_to_lbft3
 
 kgm3_to_lbft3:
-  physical_quantity: density
   from_unit: "kg/m3"
   to_unit: "lb/ft3"
   factor: 0.062428
   formula: "value_lbft3 = value_kgm3 * 0.062428"
-  inverse: lbft3_to_kgm3
-
-
-# =============================================================================
-# 六、体积系数（无量纲）
-# =============================================================================
-
-rbstb_to_m3m3:
-  physical_quantity: formation_volume_factor
-  from_unit: "RB/STB"
-  to_unit: "m3/m3"
-  factor: 1.0
-  notes: "体积比，数值相同无需换算"
-
-
-# =============================================================================
-# 七、粘度
-# =============================================================================
-
-cp_to_cp:
-  physical_quantity: viscosity
-  from_unit: cp
-  to_unit: cp
-  factor: 1.0
-  notes: "两软件均使用 cp，无需换算"
-
-
-# =============================================================================
-# 八、温度（非线性）
-# =============================================================================
-
-fahrenheit_to_celsius:
-  physical_quantity: temperature
-  from_unit: degF
-  to_unit: degC
-  factor: null
-  formula: "value_C = (value_F - 32.0) / 1.8"
-  inverse: celsius_to_fahrenheit
-
-celsius_to_fahrenheit:
-  physical_quantity: temperature
-  from_unit: degC
-  to_unit: degF
-  factor: null
-  formula: "value_F = value_C * 1.8 + 32.0"
-  inverse: fahrenheit_to_celsius
-
-
-# =============================================================================
-# 九、气体体积（地面标况）
-# =============================================================================
-
-mscf_to_m3:
-  physical_quantity: gas_volume
-  from_unit: Mscf
-  to_unit: m3
-  factor: 28.3168
-  formula: "value_m3 = value_mscf * 28.3168"
-  inverse: m3_to_mscf
-  notes: "1 Mscf = 1000 scf = 28.3168 m3"
-
-m3_to_mscf:
-  physical_quantity: gas_volume
-  from_unit: m3
-  to_unit: Mscf
-  factor: 0.035315
-  formula: "value_mscf = value_m3 * 0.035315"
-  inverse: mscf_to_m3
-
-
-# =============================================================================
-# 十、液体体积（地面标况）
-# =============================================================================
-
-stb_to_m3:
-  physical_quantity: liquid_volume
-  from_unit: STB
-  to_unit: m3
-  factor: 0.158987
-  formula: "value_m3 = value_stb * 0.158987"
-  inverse: m3_to_stb
-
-m3_to_stb:
-  physical_quantity: liquid_volume
-  from_unit: m3
-  to_unit: STB
-  factor: 6.28981
-  formula: "value_stb = value_m3 * 6.28981"
-  inverse: stb_to_m3
-
-
-# =============================================================================
-# 十一、溶解气油比（CMG FIELD ↔ Petrel METRIC）
-# =============================================================================
-
-scf_per_stb_to_m3m3:
-  physical_quantity: solution_gor
-  from_unit: "scf/STB"
-  to_unit: "m3/m3"
-  factor: 0.000178107
-  formula: "value_m3m3 = value_scf_per_stb * 0.000178107"
-  inverse: m3m3_to_scf_per_stb
-  notes: "CMG FIELD 单位 scf/STB → Petrel METRIC 单位 m3/m3"
-
-m3m3_to_scf_per_stb:
-  physical_quantity: solution_gor
-  from_unit: "m3/m3"
-  to_unit: "scf/STB"
-  factor: 5614.58
-  formula: "value_scf_per_stb = value_m3m3 * 5614.58"
-  inverse: scf_per_stb_to_m3m3
-
-
-# =============================================================================
-# 十二、流量速率
-# =============================================================================
-
-mscfd_to_m3d:
-  physical_quantity: gas_rate
-  from_unit: "Mscf/d"
-  to_unit: "m3/d"
-  factor: 28.3168
-  formula: "value_m3d = value_mscfd * 28.3168"
-  inverse: m3d_to_mscfd
-
-m3d_to_mscfd:
-  physical_quantity: gas_rate
-  from_unit: "m3/d"
-  to_unit: "Mscf/d"
-  factor: 0.035315
-  formula: "value_mscfd = value_m3d * 0.035315"
-  inverse: mscfd_to_m3d
 
 stbd_to_m3d:
-  physical_quantity: liquid_rate
   from_unit: "STB/d"
   to_unit: "m3/d"
   factor: 0.158987
   formula: "value_m3d = value_stbd * 0.158987"
-  inverse: m3d_to_stbd
 
 m3d_to_stbd:
-  physical_quantity: liquid_rate
   from_unit: "m3/d"
   to_unit: "STB/d"
   factor: 6.28981
   formula: "value_stbd = value_m3d * 6.28981"
-  inverse: stbd_to_m3d
 
+mscfd_to_m3d:
+  from_unit: "Mscf/d"
+  to_unit: "m3/d"
+  factor: 28.3168
+  formula: "value_m3d = value_mscfd * 28.3168"
 
-# =============================================================================
-# 十三、Eclipse FIELD → CMG FIELD  PVT 列内部换算
-# =============================================================================
-# 背景：
-#   Eclipse 和 CMG 都声明使用 "FIELD" 单位，但 PVT 表中 RS 和 Bg/eg 列
-#   的实际量纲存在差异。这不是 FIELD↔METRIC 的单位制换算，而是同一
-#   "FIELD" 名称下两个软件的内部量纲约定不同。
-#
-# 数值验证（来源：SPE1_ODEHIMPES.DATA + mxspe001.dat）：
-#
-#   RS 换算：
-#     Eclipse PVTO: RS=0.001 Mscf/STB → CMG *PVT: RS=1.0   scf/STB  (×1000 ✓)
-#     Eclipse PVTO: RS=1.270 Mscf/STB → CMG *PVT: RS=1270  scf/STB  (×1000 ✓)
-#
-#   eg 换算：
-#     Eclipse PVDG: Bg=166.666 RB/Mscf → CMG *PVT: eg=6.0   scf/RB  (1000/166.666≈6.0  ✓)
-#     Eclipse PVDG: Bg=0.811   RB/Mscf → CMG *PVT: eg=1233  scf/RB  (1000/0.811≈1233   ✓)
-#     Eclipse PVDG: Bg=0.386   RB/Mscf → CMG *PVT: eg=2591  scf/RB  (1000/0.386≈2591   ✓)
-# =============================================================================
+m3d_to_mscfd:
+  from_unit: "m3/d"
+  to_unit: "Mscf/d"
+  factor: 0.035315
+  formula: "value_mscfd = value_m3d * 0.035315"
+
+# Eclipse FIELD 内部列到 CMG FIELD 内部列
 
 eclipse_rs_to_cmg_rs:
-  physical_quantity: solution_gor
-  description: "Eclipse FIELD PVTO RS (Mscf/STB) → CMG FIELD *PVT RS (scf/STB)"
-  context: "Eclipse→CMG PVT 表列换算"
   from_unit: "Mscf/STB"
   to_unit: "scf/STB"
   factor: 1000.0
   formula: "rs_cmg = rs_eclipse * 1000.0"
-  applies_to: "pvto_table 的 rs 列 → cmg pvt_table 的 rs 列"
-  verified_with: "SPE1_ODEHIMPES.DATA + mxspe001.dat"
 
 eclipse_bg_to_cmg_eg:
-  physical_quantity: gas_expansion_factor
-  description: "Eclipse FIELD PVDG Bg (RB/Mscf) → CMG FIELD *PVT eg (scf/RB)"
-  context: "Eclipse→CMG PVT 表列换算"
   from_unit: "RB/Mscf"
   to_unit: "scf/RB"
   factor: null
   formula: "eg_cmg = 1000.0 / bg_eclipse"
-  applies_to: "pvdg_table 的 bg 列 → cmg pvt_table 的 eg 列"
-  verified_with: "SPE1_ODEHIMPES.DATA + mxspe001.dat"
-  notes: >
-    eg 定义为气体膨胀因子（expansion factor = 1/Bg）。
-    Eclipse Bg 单位 RB/Mscf，CMG eg 单位 scf/RB。
-    完整推导：eg_cmg [scf/RB] = (1/Bg [Mscf/RB]) × 1000 [scf/Mscf]
-                               = 1000 / Bg_eclipse
-
-
-# =============================================================================
-# 十四、K 层顺序约定（非数值换算，是软件格式约定差异）
-# =============================================================================
-# Eclipse：K=1 固定为顶层，KVAR 数组顺序自顶向下（不可更改）
-# CMG 默认：K=1 为底层，KVAR 数组顺序自底向上
-# CMG *KDIR *DOWN：将 CMG 改为 K=1 顶层，与 Eclipse 一致（不需要 reverse）
-#
-# 数值验证（SPE1）：
-#   Eclipse EQUALS DZ: K=1=20ft, K=2=30ft, K=3=50ft（顶→底顺序）
-#   CMG mxspe001 *DK *KVAR: 50.0 30.0 20.0（底→顶，已反转）✓
-#
-# 数值验证（SPE9）：
-#   CMG mxspe009 包含 *KDIR *DOWN
-#   *DK *KVAR: 20 15 26 ... 100（顶→底，与Eclipse一致，未反转）✓
-# =============================================================================
-
-eclipse_k1_convention:
-  physical_quantity: grid_layer_convention
-  software: Eclipse
-  k1_position: top
-  kvar_order: "top_to_bottom"
-  notes: "Eclipse 固定约定，不可更改"
-
-cmg_k1_default_convention:
-  physical_quantity: grid_layer_convention
-  software: CMG
-  k1_position: bottom
-  kvar_order: "bottom_to_top"
-  cmg_keyword: null
-  notes: "CMG 默认约定，无 *KDIR 关键字时生效"
-
-cmg_k1_down_convention:
-  physical_quantity: grid_layer_convention
-  software: CMG
-  k1_position: top
-  kvar_order: "top_to_bottom"
-  cmg_keyword: "*KDIR *DOWN"
-  notes: "CMG 显式声明 K=1 为顶层，与 Eclipse 一致，见 mxspe009.dat"
-
-eclipse_to_cmg_kvar_conversion:
-  physical_quantity: grid_layer_convention
-  description: "Eclipse → CMG 转换时的 KVAR 数组处理规则"
-  strategy_A:
-    name: "写出 *KDIR *DOWN（推荐）"
-    kvar_action: "保持 Eclipse 原始顺序，不 reverse"
-    depth_formula: "depth_cmg = TOPS + DK[0] / 2.0"
-    notes: "生成文件中须包含 *KDIR *DOWN 关键字"
-  strategy_B:
-    name: "CMG 默认（不写 *KDIR）"
-    kvar_action: "整体 reverse，dk/perm_i/perm_j/perm_k/porosity/ntg 均需反转"
-    depth_formula: "depth_cmg = TOPS + sum(DK_all) - DK[nk-1] / 2.0"
-    notes: "DK_all 和 DK[nk-1] 均为 Eclipse 原始顺序（顶→底），DK[nk-1] 是最底层厚度"
-    verified_with: "SPE1: TOPS=8325, DK=[20,30,50] → depth=8325+100-25=8400 ✓"
-  current_implementation: "strategy_B"
-  recommendation: "长期建议迁移至 strategy_A，可读性更好"
-
-eclipse_tops_to_cmg_depth_default:
-  physical_quantity: depth
-  description: "策略B（CMG 默认，不写 *KDIR）：TOPS → *DEPTH 1 1 1 换算"
-  from: "TOPS（Eclipse K=1顶层顶面深度，ft）"
-  to: "*DEPTH 1 1 1（CMG K=1底层中心深度，ft）"
-  factor: null
-  formula: "depth_cmg = TOPS + sum(DK_all) - DK[nk-1] / 2.0"
-  notes: >
-    DK_all 为 Eclipse 原始顺序（K=1顶层→K=nk底层），DK[nk-1] 是最底层厚度。
-    CMG K=1（底层）中心 = 顶面 + 所有层累积厚度 - 最底层半厚。
-  verified_with: "SPE1_ODEHIMPES.DATA: TOPS=8325, DK=[20,30,50] → 8325+100-25=8400 ✓"
-
-eclipse_tops_to_cmg_depth_kdir_down:
-  physical_quantity: depth
-  description: "策略A（写出 *KDIR *DOWN）：TOPS → *DEPTH 1 1 1 换算"
-  from: "TOPS（Eclipse K=1顶层顶面深度，ft）"
-  to: "*DEPTH 1 1 1（CMG K=1顶层中心深度，ft）"
-  factor: null
-  formula: "depth_cmg = TOPS + DK[0] / 2.0"
-  notes: "DK[0] 是 Eclipse K=1（顶层）的厚度，CMG K=1 与 Eclipse K=1 相同"
-  verified_with: "SPE9 mxspe009.dat: *KDIR *DOWN, *DEPTH 1 1 1 9010."

@@ -12,6 +12,17 @@ from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.rule_loader import get_loader
+from utils.reporting import write_report_bundle
+from business_rules import (
+    apply_radial_perm_j,
+    compute_depth_from_tops,
+    derive_pb,
+    ensure_co_cvo,
+    merge_pvt_saturated_only,
+    merge_rockfluid_tables,
+    reorder_k_array,
+    should_reverse_k_layers,
+)
 
 # ── 格式化工具 ────────────────────────────────────────────────────────────────
 
@@ -87,167 +98,8 @@ def _write_array(lines, keyword, obj):
 # ── PVT 合并（pvto_table + pvdg_table → 6列 pvt_table）─────────────────────
 
 def _merge_pvt(fluid):
-    """
-    如果 JSON 里有 pvto_table + pvdg_table（Petrel来源），
-    合并为 CMG *PVT 格式的 6列表：p, rs, bo, eg, viso, visg
-    如果已有 pvt_table（CMG来源）则直接使用。
-    """
-    if fluid.get("pvt_table"):
-        return fluid["pvt_table"]
-
-    pvto = fluid.get("pvto_table")
-    pvdg = fluid.get("pvdg_table")
-    if not pvto or not pvdg:
-        return None
-
-    # pvto cols: [rs, p, bo, viso]
-    pvto_rows = pvto["rows"]
-    # pvdg cols: [p, bg, visg]
-    pvdg_rows = pvdg["rows"]
-
-    # 建立 PVDG 压力→(bg, visg) 插值字典
-    pvdg_p = [r[0] for r in pvdg_rows]
-    pvdg_bg = [r[1] for r in pvdg_rows]
-    pvdg_visg = [r[2] for r in pvdg_rows]
-
-    def _interp(px, xs, ys):
-        if px <= xs[0]:
-            return ys[0]
-        if px >= xs[-1]:
-            return ys[-1]
-        for i in range(len(xs) - 1):
-            if xs[i] <= px <= xs[i + 1]:
-                t = (px - xs[i]) / (xs[i + 1] - xs[i])
-                return ys[i] + t * (ys[i + 1] - ys[i])
-        return ys[-1]
-
-    # CMG *PVT 只支持饱和点（每个RS对应唯一的饱和压力）
-    # PVTO 中同一 RS 下的欠饱和点（后续更高压力行）须丢弃
-    # 判断依据：rs 值与上一行相同 → 欠饱和点
-    merged = []
-    seen_rs = set()
-    for row in pvto_rows:
-        rs, p, bo, viso = row[0], row[1], row[2], row[3]
-        # 跳过欠饱和行（同一 RS 已出现过）
-        rs_key = round(rs, 6)
-        if rs_key in seen_rs:
-            continue
-        seen_rs.add(rs_key)
-        bg = _interp(p, pvdg_p, pvdg_bg)
-        visg = _interp(p, pvdg_p, pvdg_visg)
-        eg = 1.0 / bg if bg > 0 else 0.0
-        merged.append([p, rs, bo, eg, viso, visg])
-
-    # 按压力升序排序（CMG *PVT 要求升序）
-    merged.sort(key=lambda r: r[0])
-
-    return {"type": "table",
-            "columns": ["p", "rs", "bo", "eg", "viso", "visg"],
-            "rows": merged,
-            "confidence": 0.95,
-            "source": "merged from pvto_table + pvdg_table"}
-
-
-# ── 相渗表合并（swfn/sgfn/sof3 → swt/slt）──────────────────────────────────
-
-def _merge_rockfluid(rockfluid):
-    """
-    如果 JSON 里有 swfn/sgfn/sof3（Petrel来源），合并为 CMG swt/slt。
-    如果已有 swt_table/slt_table（CMG来源）则直接使用。
-    """
-    # 优先使用已有表
-    swt = rockfluid.get("swt_table") or rockfluid.get("swof_table")
-    slt = rockfluid.get("slt_table") or rockfluid.get("sgof_table")
-
-    if not swt:
-        swt = _merge_swt(rockfluid)
-    if not slt:
-        slt = _merge_slt(rockfluid)
-
-    return swt, slt
-
-
-def _interp1d(x, xs, ys):
-    if len(xs) < 2:
-        return ys[0] if ys else 0.0
-    if x <= xs[0]: return ys[0]
-    if x >= xs[-1]: return ys[-1]
-    for i in range(len(xs) - 1):
-        if xs[i] <= x <= xs[i + 1]:
-            t = (x - xs[i]) / (xs[i + 1] - xs[i])
-            return ys[i] + t * (ys[i + 1] - ys[i])
-    return ys[-1]
-
-
-def _merge_swt(rockfluid):
-    """SWFN(sw,krw,pcow) + SOF3(so,krow,krog) → SWT(sw,krw,krow,pcow)"""
-    swfn = rockfluid.get("swfn_table")
-    sof3 = rockfluid.get("sof3_table")
-    if not swfn:
-        return None
-
-    swfn_rows = swfn["rows"]   # [sw, krw, pcow]
-    sof3_rows = sof3["rows"] if sof3 else None
-
-    # SOF3: so→krow
-    if sof3_rows:
-        sof3_so   = [r[0] for r in sof3_rows]
-        sof3_krow = [r[1] for r in sof3_rows]
-    else:
-        sof3_so = sof3_krow = None
-
-    rows = []
-    for row in swfn_rows:
-        sw, krw, pcow = row[0], row[1], row[2]
-        if sof3_so:
-            so = 1.0 - sw
-            krow = _interp1d(so, sof3_so, sof3_krow)
-        else:
-            krow = 1.0 - sw  # fallback 线性
-        rows.append([sw, krw, krow, pcow])
-
-    return {"type": "table",
-            "columns": ["sw", "krw", "krow", "pcow"],
-            "rows": rows,
-            "confidence": 0.9,
-            "source": "merged from swfn_table + sof3_table"}
-
-
-def _merge_slt(rockfluid):
-    """SGFN(sg,krg,pcog) + SOF3(so,krow,krog) → SLT(sl,krg,krog,pcog)"""
-    sgfn = rockfluid.get("sgfn_table")
-    sof3 = rockfluid.get("sof3_table")
-    if not sgfn:
-        return None
-
-    sgfn_rows = sgfn["rows"]   # [sg, krg, pcog]
-    sof3_rows = sof3["rows"] if sof3 else None
-
-    if sof3_rows:
-        sof3_so   = [r[0] for r in sof3_rows]
-        sof3_krog = [r[2] for r in sof3_rows]
-    else:
-        sof3_so = sof3_krog = None
-
-    rows = []
-    for row in sgfn_rows:
-        sg, krg, pcog = row[0], row[1], row[2]
-        sl = 1.0 - sg
-        if sof3_so:
-            so = 1.0 - sg
-            krog = _interp1d(so, sof3_so, sof3_krog)
-        else:
-            krog = sg  # fallback
-        rows.append([sl, krg, krog, pcog])
-
-    # SLT 按 sl 升序排列
-    rows.sort(key=lambda r: r[0])
-
-    return {"type": "table",
-            "columns": ["sl", "krg", "krog", "pcog"],
-            "rows": rows,
-            "confidence": 0.9,
-            "source": "merged from sgfn_table + sof3_table"}
+    """业务逻辑委托给 business_rules"""
+    return merge_pvt_saturated_only(fluid)
 
 
 # ── 主生成器 ──────────────────────────────────────────────────────────────────
@@ -266,10 +118,13 @@ class CMGGenerator:
         fluid     = data.get("fluid", {})
         rockfluid = data.get("rockfluid", {})
         initial   = data.get("initial", {})
+
+        reservoir = apply_radial_perm_j(grid, reservoir)
+        initial = dict(initial)
+        initial["bubble_point_pressure"] = derive_pb(initial, fluid)
+
         numerical = data.get("numerical", {})
         wells     = data.get("wells", [])
-
-        # ── 文件头 ────────────────────────────────────────────────────────────
         lines += [
             f"** Generated by UDA Middle Layer",
             f"** Source: {meta.get('source_file', 'unknown')}",
@@ -347,7 +202,7 @@ class CMGGenerator:
 
     def _write_section(self, lines, section_name, section_data, grid=None):
         cfg = self._gen_cfg.get(section_name, {})
-        gt = (grid or {}).get("grid_type", "CART").upper() if grid else "CART"
+        reverse_k = should_reverse_k_layers(grid or {})
 
         for key, field_cfg in cfg.items():
             kw = field_cfg.get("keyword")
@@ -355,15 +210,6 @@ class CMGGenerator:
             if not kw or fmt in ("depth_from_tops", "depth_block"):
                 continue
             obj = section_data.get(key)
-
-            # 径向网格：perm_j 缺失时用 perm_i 填充（PERMR 同时作径向和切向）
-            if obj is None and section_name == "reservoir" and gt == "RADIAL":
-                if key == "perm_j":
-                    obj = section_data.get("perm_i")
-                elif key == "perm_k" and section_data.get("perm_k") is None:
-                    # perm_k 若真的缺失才跳过（PERMZ 可能已经 MULTIPLY 了，保留原值）
-                    pass
-
             if obj is None:
                 continue
             val = _get_val(obj)
@@ -373,7 +219,14 @@ class CMGGenerator:
             if fmt == "scalar_inline":
                 lines.append(f"{kw}  {_fmt(val).strip()}")
             elif fmt == "array":
-                _write_array(lines, kw, obj)
+                out_obj = obj
+                if isinstance(val, list) and section_name in ("grid", "reservoir") and key in (
+                    "dk", "porosity", "perm_i", "perm_j", "perm_k", "ntg"
+                ):
+                    out_obj = dict(obj)
+                    out_obj["values"] = reorder_k_array(val, reverse_k)
+                    out_obj["type"] = "array"
+                _write_array(lines, kw, out_obj)
 
     # ── 网格写入 ──────────────────────────────────────────────────────────────
 
@@ -403,6 +256,7 @@ class CMGGenerator:
         nj = grid.get("nj", 1)
         nk = grid.get("nk", 1)
         gt = grid.get("grid_type", "CART").upper()
+        reverse_k = should_reverse_k_layers(grid)
 
         if gt == "RADIAL":
             lines.append(f"*GRID *RADIAL  {ni}  {nj}  {nk}")
@@ -410,68 +264,62 @@ class CMGGenerator:
             if rw is not None:
                 lines.append(f"*RW  {_fmt(rw).strip()}")
 
-            # *DI *IVAR — 径向方向，ni 个值（不能用 *CON/*KVAR）
             di_obj = grid.get("di") or grid.get("drv")
             if di_obj:
                 di_val = _get_val(di_obj)
-                if isinstance(di_val, list) and len(set(round(v,6) for v in di_val)) == 1:
-                    # 所有径向间距相同时才可以用 *CON
+                if isinstance(di_val, list) and len(set(round(v, 6) for v in di_val)) == 1:
                     self._write_array_forced(lines, "*DI", di_obj, "CON")
                 else:
                     self._write_array_forced(lines, "*DI", di_obj, "IVAR")
 
-            # *DJ *CON 360 — 角度方向（径向模型通常固定360°）
             dj_obj = grid.get("dj") or grid.get("dtheta")
             if dj_obj:
                 dj_val = _get_val(dj_obj)
-                if isinstance(dj_val, list):
-                    if len(set(round(v, 4) for v in dj_val)) == 1:
-                        lines.append(f"*DJ *CON {dj_val[0]:.1f}")
-                    else:
-                        self._write_array_forced(lines, "*DJ", dj_obj, "JVAR")
-                elif dj_val is not None:
-                    lines.append(f"*DJ *CON {dj_val:.1f}")
+                if isinstance(dj_val, list) and len(set(round(v, 4) for v in dj_val)) != 1:
+                    self._write_array_forced(lines, "*DJ", dj_obj, "JVAR")
                 else:
-                    lines.append("*DJ *CON 360.0")
+                    dj_scalar = dj_val[0] if isinstance(dj_val, list) else dj_val
+                    lines.append(f"*DJ *CON {float(dj_scalar):.1f}")
             else:
                 lines.append("*DJ *CON 360.0")
 
-            # *DK *KVAR — 层方向，nk 个值（不能用 *IVAR）
             dk_obj = grid.get("dk")
             if dk_obj:
                 dk_val = _get_val(dk_obj)
-                if isinstance(dk_val, list) and len(set(round(v,6) for v in dk_val)) == 1:
-                    self._write_array_forced(lines, "*DK", dk_obj, "CON")
+                if isinstance(dk_val, list):
+                    out = dict(dk_obj)
+                    out["type"] = "array"
+                    out["values"] = reorder_k_array(dk_val, reverse_k)
+                    self._write_array_forced(lines, "*DK", out, "KVAR")
                 else:
-                    self._write_array_forced(lines, "*DK", dk_obj, "KVAR")
-
+                    self._write_array_forced(lines, "*DK", dk_obj, "CON")
         else:
-            # 笛卡尔网格：*DI/*DJ/*DK，修饰词由 JSON modifier 决定（CON/KVAR等均合法）
             lines.append(f"*GRID *CART  {ni}  {nj}  {nk}")
             for key, kw in [("di", "*DI"), ("dj", "*DJ"), ("dk", "*DK")]:
                 obj = grid.get(key)
-                if obj:
-                    _write_array(lines, kw, obj)
+                if not obj:
+                    continue
+                val = _get_val(obj)
+                out_obj = obj
+                if key == "dk" and isinstance(val, list):
+                    out_obj = dict(obj)
+                    out_obj["type"] = "array"
+                    out_obj["values"] = reorder_k_array(val, reverse_k)
+                _write_array(lines, kw, out_obj)
 
-        # 深度
-        depth_obj = grid.get("depth_ref_block")
+        depth_obj = grid.get("depth_ref_block") or compute_depth_from_tops(
+            grid, strategy="default" if reverse_k else "kdir_down"
+        )
         if depth_obj and isinstance(depth_obj, dict):
             i = depth_obj.get("i", 1)
             j = depth_obj.get("j", 1)
             k = depth_obj.get("k", 1)
             v = depth_obj.get("value", 0)
             lines.append(f"*DEPTH  {i}  {j}  {k}  {_fmt(v).strip()}")
-        elif grid.get("tops_ref"):
-            tops_val = _get_val(grid["tops_ref"])
-            if isinstance(tops_val, list):
-                lines.append(f"*DEPTH  1  1  1  {_fmt(tops_val[0]).strip()}")
-            elif tops_val is not None:
-                lines.append(f"*DEPTH  1  1  1  {_fmt(tops_val).strip()}")
 
     # ── 流体写入 ──────────────────────────────────────────────────────────────
 
     def _write_fluid(self, lines, fluid):
-        # PVT 表（合并 pvto+pvdg 或直接用 pvt_table）
         pvt = _merge_pvt(fluid)
         if pvt:
             lines.append("")
@@ -480,7 +328,11 @@ class CMGGenerator:
             for row in pvt["rows"]:
                 lines.append("  " + "".join(_fmt(v) for v in row))
 
-        # 密度
+        co_obj, cvo_obj = ensure_co_cvo(fluid)
+        fluid = dict(fluid)
+        fluid["oil_compressibility"] = co_obj
+        fluid["oil_viscosity_coeff"] = cvo_obj
+
         cfg = self._gen_cfg.get("fluid", {})
         for key, field_cfg in cfg.items():
             if key == "pvt_table":
@@ -499,7 +351,7 @@ class CMGGenerator:
     # ── 相渗写入 ──────────────────────────────────────────────────────────────
 
     def _write_rockfluid(self, lines, rockfluid):
-        swt, slt = _merge_rockfluid(rockfluid)
+        swt, slt = merge_rockfluid_tables(rockfluid)
         lines.append("*RPT 1")
         if swt:
             cols = swt.get("columns", ["sw", "krw", "krow", "pcow"])
@@ -612,12 +464,16 @@ class CMGGenerator:
             for _, idx, ev, w in group:
                 if "rate" in ev:
                     rate = ev["rate"]
-                    lines.append(f"*ALTER  {idx}  {_fmt(rate).strip()}")
+                    lines.append("*ALTER")
+                    lines.append(f"  {idx}")
+                    lines.append(f"  {_fmt(rate).strip()}")
                 elif "target" in ev:
                     target = ev.get("target", "ORATE")
                     val    = ev.get("value", 0.0)
                     lines.append(f"** WELTARG: {w.get('well_name')} {target}={val}")
-                    lines.append(f"*ALTER  {idx}  {_fmt(val).strip()}")
+                    lines.append("*ALTER")
+                    lines.append(f"  {idx}")
+                    lines.append(f"  {_fmt(val).strip()}")
 
         # 结束时间
         total_time = meta.get("_total_sim_time", 0.0)
@@ -629,7 +485,8 @@ class CMGGenerator:
 
 # ── 对外接口 ──────────────────────────────────────────────────────────────────
 
-def generate_cmg(data_or_json, output_file=None):
+def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/generators"):
+    source_name = str(data_or_json) if isinstance(data_or_json, (str, Path)) else "in_memory_json"
     if isinstance(data_or_json, (str, Path)):
         with open(data_or_json, encoding="utf-8") as f:
             data = json.load(f)
@@ -638,10 +495,40 @@ def generate_cmg(data_or_json, output_file=None):
 
     content = CMGGenerator().generate(data)
 
+    out_path = None
     if output_file:
-        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-        with open(output_file, "w", encoding="utf-8") as f:
+        out_path = Path(output_file)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as f:
             f.write(content)
+
+    warnings = []
+    wells = data.get("wells", []) if isinstance(data, dict) else []
+    if not wells:
+        warnings.append("未发现井数据，WELL DATA 段可能为空")
+
+    summary = [
+        ("输出文件", str(out_path) if out_path else "(未写盘)"),
+        ("行数", len(content.splitlines())),
+        ("井数量", len(wells)),
+        ("网格类型", data.get("grid", {}).get("grid_type", "CART") if isinstance(data, dict) else "unknown"),
+    ]
+    md_path, json_path = write_report_bundle(
+        report_dir=report_dir,
+        source_name=Path(source_name).name,
+        report_type="generate_cmg",
+        title="CMG 生成报告",
+        summary_items=summary,
+        warnings=warnings,
+        errors=[],
+        details={
+            "has_pvto_table": bool(data.get("fluid", {}).get("pvto_table")) if isinstance(data, dict) else False,
+            "has_pvdg_table": bool(data.get("fluid", {}).get("pvdg_table")) if isinstance(data, dict) else False,
+            "has_pvt_table": bool(data.get("fluid", {}).get("pvt_table")) if isinstance(data, dict) else False,
+        },
+    )
+    if isinstance(data, dict):
+        data.setdefault("_generate_report", {"md": str(md_path), "json": str(json_path)})
 
     return content
 

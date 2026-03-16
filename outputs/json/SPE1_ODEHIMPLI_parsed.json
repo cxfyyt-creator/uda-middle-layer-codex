@@ -1,10 +1,10 @@
 {
   "meta": {
     "source_software": "petrel_eclipse",
-    "source_file": "SPE2_CHAP.DATA",
+    "source_file": "SPE1_ODEHIMPLI.DATA",
     "unit_system": "field",
-    "conversion_timestamp": "2026-03-13T20:46:35.855488",
-    "start_date": "1982-01-01",
+    "conversion_timestamp": "2026-03-16T09:13:04.489644",
+    "start_date": "1982-10-19",
     "fluid_oil": true,
     "fluid_water": true,
     "fluid_gas": true,
@@ -12,61 +12,31 @@
   },
   "grid": {
     "ni": 10,
-    "nj": 1,
-    "nk": 15,
-    "grid_type": "RADIAL",
-    "inrad": {
+    "nj": 10,
+    "nk": 3,
+    "grid_type": "CART",
+    "di": {
       "type": "scalar",
-      "value": 0.25,
+      "value": 1000.0,
       "unit": "ft",
       "confidence": 0.99,
-      "source": "grid inrad"
+      "source": "EQUALS DX",
+      "modifier": "CON"
     },
-    "drv": {
-      "type": "array",
-      "values": [
-        1.75,
-        2.32,
-        5.01,
-        10.84,
-        23.39,
-        50.55,
-        109.21,
-        235.92,
-        509.68,
-        1101.08
-      ],
-      "unit": "ft",
-      "grid_order": "IJK",
-      "confidence": 0.99,
-      "source": "grid drv"
-    },
-    "dtheta": {
+    "dj": {
       "type": "scalar",
-      "value": 360.0,
-      "unit": "deg",
+      "value": 1000.0,
+      "unit": "ft",
       "confidence": 0.99,
-      "source": "EQUALS DTHETA",
+      "source": "EQUALS DY",
       "modifier": "CON"
     },
     "dk": {
       "type": "array",
       "values": [
         20.0,
-        15.0,
-        26.0,
-        15.0,
-        16.0,
-        14.0,
-        8.0,
-        8.0,
-        18.0,
-        12.0,
-        19.0,
-        18.0,
-        20.0,
-        50.0,
-        100.0
+        30.0,
+        50.0
       ],
       "unit": "ft",
       "grid_order": "IJK",
@@ -77,19 +47,7 @@
     "tops_ref": {
       "type": "array",
       "values": [
-        9000.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
+        8325.0,
         0.0,
         0.0
       ],
@@ -101,91 +59,63 @@
     }
   },
   "reservoir": {
+    "porosity": {
+      "type": "scalar",
+      "value": 0.3,
+      "unit": "fraction",
+      "confidence": 0.99,
+      "source": "EQUALS PORO",
+      "modifier": "CON"
+    },
     "perm_i": {
       "type": "array",
       "values": [
-        35.0,
-        47.5,
-        148.0,
-        202.0,
-        90.0,
-        418.5,
-        775.0,
-        60.0,
-        682.0,
-        472.0,
-        125.0,
-        300.0,
-        137.5,
-        191.0,
-        350.0
+        500.0,
+        50.0,
+        200.0
       ],
       "unit": "md",
       "grid_order": "IJK",
       "confidence": 0.99,
-      "source": "EQUALS PERMR",
+      "source": "EQUALS PERMX",
       "modifier": "KVAR"
     },
-    "porosity": {
+    "perm_j": {
       "type": "array",
       "values": [
-        0.087,
-        0.097,
-        0.111,
-        0.16,
-        0.13,
-        0.17,
-        0.17,
-        0.08,
-        0.14,
-        0.13,
-        0.12,
-        0.105,
-        0.12,
-        0.116,
-        0.157
+        500.0,
+        50.0,
+        200.0
       ],
-      "unit": "fraction",
+      "unit": "md",
       "grid_order": "IJK",
       "confidence": 0.99,
-      "source": "EQUALS PORO",
+      "source": "EQUALS PERMX (COPY PERMX→PERMY)",
       "modifier": "KVAR"
     },
     "perm_k": {
       "type": "array",
       "values": [
-        3.5,
-        4.75,
-        14.8,
-        20.200000000000003,
-        9.0,
-        41.85,
-        77.5,
-        6.0,
-        68.2,
-        47.2,
-        12.5,
-        30.0,
-        13.75,
-        19.1,
-        35.0
+        500.0,
+        50.0,
+        200.0
       ],
       "unit": "md",
       "grid_order": "IJK",
       "confidence": 0.99,
-      "source": "EQUALS PERMR (COPY PERMR→PERMZ)",
+      "source": "EQUALS PERMX (COPY PERMX→PERMZ)",
       "modifier": "KVAR"
     },
     "rock_ref_pressure": {
       "type": "scalar",
-      "value": 3600.0,
+      "value": 14.7,
       "unit": "psia",
       "confidence": 0.99,
       "source": "PROPS ROCK"
     },
     "rock_compressibility": {
       "type": "scalar",
-      "value": 4e-06,
+      "value": 3e-06,
       "unit": "1/psi",
       "confidence": 0.99,
       "source": "PROPS ROCK"
@@ -194,28 +124,28 @@
   "fluid": {
     "water_ref_pressure": {
       "type": "scalar",
-      "value": 3600.0,
+      "value": 4014.7,
       "unit": "psia",
       "confidence": 0.99,
       "source": "PROPS PVTW"
     },
     "water_fvf": {
       "type": "scalar",
-      "value": 1.00341,
+      "value": 1.029,
       "unit": "RB/STB",
       "confidence": 0.99,
       "source": "PROPS PVTW"
     },
     "water_compressibility": {
       "type": "scalar",
-      "value": 3e-06,
+      "value": 3.13e-06,
       "unit": "1/psi",
       "confidence": 0.99,
       "source": "PROPS PVTW"
     },
     "water_viscosity": {
       "type": "scalar",
-      "value": 0.96,
+      "value": 0.31,
       "unit": "cp",
       "confidence": 0.99,
       "source": "PROPS PVTW"
@@ -229,21 +159,21 @@
     },
     "oil_density": {
       "type": "scalar",
-      "value": 45.0,
+      "value": 49.1,
       "unit": "lb/ft3",
       "confidence": 0.99,
       "source": "PROPS DENSITY"
     },
     "water_density": {
       "type": "scalar",
-      "value": 63.02,
+      "value": 64.79,
       "unit": "lb/ft3",
       "confidence": 0.99,
       "source": "PROPS DENSITY"
     },
     "gas_density": {
       "type": "scalar",
-      "value": 0.0702,
+      "value": 0.06054,
       "unit": "lb/ft3",
       "confidence": 0.99,
       "source": "PROPS DENSITY"
@@ -257,74 +187,54 @@
       ],
       "rows": [
         [
-          400.0,
-          5.9,
-          0.013
+          14.7,
+          166.666,
+          0.008
         ],
         [
-          800.0,
-          2.95,
-          0.0135
+          264.7,
+          12.093,
+          0.0096
         ],
         [
-          1200.0,
-          1.96,
+          514.7,
+          6.274,
+          0.0112
+        ],
+        [
+          1014.7,
+          3.197,
           0.014
         ],
         [
-          1600.0,
-          1.47,
-          0.0145
+          2014.7,
+          1.614,
+          0.0189
         ],
         [
-          2000.0,
-          1.18,
-          0.015
+          2514.7,
+          1.294,
+          0.0208
         ],
         [
-          2400.0,
-          0.98,
-          0.0155
+          3014.7,
+          1.08,
+          0.0228
         ],
         [
-          2800.0,
-          0.84,
-          0.016
+          4014.7,
+          0.811,
+          0.0268
         ],
         [
-          3200.0,
-          0.74,
-          0.0165
+          5014.7,
+          0.649,
+          0.0309
         ],
         [
-          3600.0,
-          0.65,
-          0.017
-        ],
-        [
-          4000.0,
-          0.59,
-          0.0175
-        ],
-        [
-          4400.0,
-          0.54,
-          0.018
-        ],
-        [
-          4800.0,
-          0.49,
-          0.0185
-        ],
-        [
-          5200.0,
-          0.45,
-          0.019
-        ],
-        [
-          5600.0,
-          0.42,
-          0.0195
+          9014.7,
+          0.386,
+          0.047
         ]
       ],
       "confidence": 0.99,
@@ -340,112 +250,76 @@
       ],
       "rows": [
         [
-          0.165,
-          400.0,
-          1.012,
-          1.17
+          0.001,
+          14.7,
+          1.062,
+          1.04
         ],
         [
-          0.335,
-          800.0,
-          1.0255,
-          1.14
+          0.0905,
+          264.7,
+          1.15,
+          0.975
         ],
         [
-          0.5,
-          1200.0,
-          1.038,
-          1.11
-        ],
-        [
-          0.665,
-          1600.0,
-          1.051,
-          1.08
-        ],
-        [
-          0.828,
-          2000.0,
-          1.063,
-          1.06
-        ],
-        [
-          0.985,
-          2400.0,
-          1.075,
-          1.03
-        ],
-        [
-          1.13,
-          2800.0,
-          1.087,
-          1.0
-        ],
-        [
-          1.27,
-          3200.0,
-          1.0985,
-          0.98
-        ],
-        [
-          1.39,
-          3600.0,
-          1.11,
-          0.95
-        ],
-        [
-          1.5,
-          4000.0,
-          1.12,
-          0.94
-        ],
-        [
-          1.6,
-          4400.0,
-          1.13,
-          0.92
-        ],
-        [
-          1.676,
-          4800.0,
-          1.14,
+          0.18,
+          514.7,
+          1.207,
           0.91
         ],
         [
-          1.75,
-          5200.0,
-          1.148,
-          0.9
+          0.371,
+          1014.7,
+          1.295,
+          0.83
         ],
         [
-          1.81,
-          5600.0,
-          1.155,
-          0.89
+          0.636,
+          2014.7,
+          1.435,
+          0.695
         ],
         [
-          1.81,
-          6000.0,
-          1.1504,
-          0.89
+          0.775,
+          2514.7,
+          1.5,
+          0.641
         ],
         [
-          1.81,
-          6400.0,
-          1.1458,
-          0.89
+          0.93,
+          3014.7,
+          1.565,
+          0.594
         ],
         [
-          1.81,
-          6800.0,
-          1.1412,
-          0.89
+          1.27,
+          4014.7,
+          1.695,
+          0.51
         ],
         [
-          1.81,
-          7200.0,
-          1.1367,
-          0.89
+          1.27,
+          5014.7,
+          1.671,
+          0.549
+        ],
+        [
+          1.27,
+          9014.7,
+          1.579,
+          0.74
+        ],
+        [
+          1.618,
+          5014.7,
+          1.827,
+          0.449
+        ],
+        [
+          1.618,
+          9014.7,
+          1.726,
+          0.605
         ]
       ],
       "confidence": 0.99,
@@ -462,43 +336,13 @@
       ],
       "rows": [
         [
-          0.22,
+          0.12,
           0.0,
-          7.0
-        ],
-        [
-          0.3,
-          0.07,
-          4.0
-        ],
-        [
-          0.4,
-          0.15,
-          3.0
-        ],
-        [
-          0.5,
-          0.24,
-          2.5
-        ],
-        [
-          0.6,
-          0.33,
-          2.0
-        ],
-        [
-          0.8,
-          0.65,
-          1.0
-        ],
-        [
-          0.9,
-          0.83,
-          0.5
+          0.0
         ],
         [
           1.0,
-          1.0,
+          1e-05,
           0.0
         ]
       ],
@@ -519,49 +363,69 @@
           0.0
         ],
         [
-          0.04,
+          0.02,
           0.0,
-          0.2
+          0.0
         ],
         [
-          0.1,
-          0.022,
-          0.5
+          0.05,
+          0.005,
+          0.0
+        ],
+        [
+          0.12,
+          0.025,
+          0.0
         ],
         [
           0.2,
-          0.1,
-          1.0
+          0.075,
+          0.0
+        ],
+        [
+          0.25,
+          0.125,
+          0.0
         ],
         [
           0.3,
-          0.24,
-          1.5
+          0.19,
+          0.0
         ],
         [
           0.4,
-          0.34,
-          2.0
+          0.41,
+          0.0
+        ],
+        [
+          0.45,
+          0.6,
+          0.0
         ],
         [
           0.5,
-          0.42,
-          2.5
+          0.72,
+          0.0
         ],
         [
           0.6,
-          0.5,
-          3.0
+          0.87,
+          0.0
         ],
         [
           0.7,
-          0.8125,
-          3.5
+          0.94,
+          0.0
         ],
         [
-          0.78,
+          0.85,
+          0.98,
+          0.0
+        ],
+        [
           1.0,
-          3.9
+          1.0,
+          0.0
         ]
       ],
       "confidence": 0.99,
@@ -581,57 +445,67 @@
           0.0
         ],
         [
-          0.2,
+          0.18,
           0.0,
           0.0
         ],
         [
-          0.38,
-          0.00432,
-          0.0
+          0.28,
+          0.0001,
+          0.0001
         ],
         [
-          0.4,
-          0.0048,
-          0.004
+          0.38,
+          0.001,
+          0.001
+        ],
+        [
+          0.43,
+          0.01,
+          0.01
         ],
         [
           0.48,
-          0.05288,
-          0.02
-        ],
-        [
-          0.5,
-          0.0649,
-          0.036
+          0.021,
+          0.021
         ],
         [
           0.58,
-          0.11298,
-          0.1
+          0.09,
+          0.09
         ],
         [
-          0.6,
-          0.125,
-          0.146
+          0.63,
+          0.2,
+          0.2
         ],
         [
           0.68,
-          0.345,
-          0.33
+          0.35,
+          0.35
         ],
         [
+          0.76,
           0.7,
-          0.4,
-          0.42
+          0.7
         ],
         [
-          0.74,
-          0.7,
-          0.6
+          0.83,
+          0.98,
+          0.98
         ],
         [
-          0.78,
+          0.86,
+          0.997,
+          0.997
+        ],
+        [
+          0.879,
+          1.0,
+          1.0
+        ],
+        [
+          0.88,
           1.0,
           1.0
         ]
@@ -643,59 +517,66 @@
   "initial": {
     "ref_depth": {
       "type": "scalar",
-      "value": 9035.0,
+      "value": 8400.0,
       "unit": "ft",
       "confidence": 0.99,
       "source": "SOLUTION EQUIL"
     },
     "ref_pressure": {
       "type": "scalar",
-      "value": 3600.0,
+      "value": 4800.0,
       "unit": "psia",
       "confidence": 0.99,
       "source": "SOLUTION EQUIL"
     },
     "woc_depth": {
       "type": "scalar",
-      "value": 9209.0,
+      "value": 8500.0,
       "unit": "ft",
       "confidence": 0.99,
       "source": "SOLUTION EQUIL"
     },
     "goc_depth": {
       "type": "scalar",
-      "value": 9035.0,
+      "value": 8200.0,
       "unit": "ft",
       "confidence": 0.99,
       "source": "SOLUTION EQUIL"
+    },
+    "rsvd_table": {
+      "type": "table",
+      "columns": [
+        "depth",
+        "rs"
+      ],
+      "rows": [
+        [
+          8200.0,
+          1.27
+        ]
+      ],
+      "confidence": 0.99,
+      "source": "SOLUTION RSVD"
     }
   },
   "numerical": {},
   "wells": [
     {
-      "well_name": "P1",
+      "well_name": "PRODUCER",
       "well_type": "PRODUCER",
-      "well_group": "G       ",
-      "well_i": 1,
-      "well_j": 1,
+      "well_group": "G",
+      "well_i": 10,
+      "well_j": 10,
       "phase": "OIL",
       "bhp_max": null,
       "bhp_min": null,
-      "rate_max": 1000.0,
+      "rate_max": 20000.0,
       "rate_min": null,
       "perforations": [
         {
-          "i": 1,
-          "j": 1,
-          "k": 7,
-          "wi": -1.0,
-          "status": "OPEN",
-          "perf_type": "COMPDAT"
-        },
-        {
-          "i": 1,
-          "j": 1,
-          "k": 8,
+          "i": 10,
+          "j": 10,
+          "k": 3,
           "wi": -1.0,
           "status": "OPEN",
           "perf_type": "COMPDAT"
@@ -703,25 +584,35 @@
       ],
       "well_radius": null,
       "inj_fluid": null,
-      "alter_schedule": [
+      "alter_schedule": [],
+      "source": "SCHEDULE WELSPECS"
+    },
+    {
+      "well_name": "INJECTOR",
+      "well_type": "INJECTOR",
+      "well_group": "G",
+      "well_i": 1,
+      "well_j": 1,
+      "phase": "GAS",
+      "bhp_max": null,
+      "bhp_min": null,
+      "rate_max": 100000.0,
+      "rate_min": null,
+      "perforations": [
         {
-          "target": "ORAT",
-          "value": 100.0,
-          "time": 10.0
-        },
-        {
-          "target": "ORAT",
-          "value": 1000.0,
-          "time": 50.0
-        },
-        {
-          "target": "ORAT",
-          "value": 100.0,
-          "time": 720.0
+          "i": 1,
+          "j": 1,
+          "k": 1,
+          "wi": -1.0,
+          "status": "OPEN",
+          "perf_type": "COMPDAT"
         }
       ],
+      "well_radius": 0.5,
+      "inj_fluid": "GAS",
+      "alter_schedule": [],
       "source": "SCHEDULE WELSPECS"
     }
   ],
-  "_total_sim_time": 900.0
+  "_total_sim_time": 1200.0
 }

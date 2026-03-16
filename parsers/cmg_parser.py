@@ -14,6 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.rule_loader import get_loader
+from utils.reporting import write_report_bundle
 
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
 
@@ -319,6 +320,24 @@ class CMGParser:
             R["meta"]["unit_system"] = t[1].lstrip("*").lower()
             self.pos += 1
 
+    def _parse_kdir(self, R):
+        """*KDIR *DOWN|*UP 或 *KDIR DOWN|UP"""
+        t = self._peek()
+        if not t:
+            return
+
+        _, tok = t
+        kdir = None
+        if tok.startswith("*"):
+            kdir = tok.lstrip("*").upper()
+            self.pos += 1
+        elif not _is_kw(tok):
+            kdir = tok.upper()
+            self.pos += 1
+
+        if kdir in ("DOWN", "UP"):
+            R["grid"]["kdir"] = kdir
+
     # ── 自定义：井定义 ────────────────────────────────────────────────────────
 
     def _parse_well(self, R, in_run_section):
@@ -593,6 +612,7 @@ class CMGParser:
         }
 
         in_run_section = False
+        unknown_keys = []
 
         while self._peek():
             lineno, tok = self._next()
@@ -651,7 +671,13 @@ class CMGParser:
                         handler(R, in_run_section)
                     else:
                         handler(R)
-            # else: 未注册关键字，静默跳过
+            else:
+                # 未注册关键字，记录后静默跳过
+                if u not in unknown_keys:
+                    unknown_keys.append(u)
+
+        if unknown_keys:
+            R["unknown_keywords"] = {k: [] for k in unknown_keys}
 
         R.pop("_current_time", None)
         return R
@@ -659,12 +685,43 @@ class CMGParser:
 
 # ── 对外接口 ──────────────────────────────────────────────────────────────────
 
-def parse_cmg(filepath, output_json=None):
+def parse_cmg(filepath, output_json=None, report_dir="outputs/reports/parsers"):
     r = CMGParser(filepath).parse()
     if output_json:
         Path(output_json).parent.mkdir(parents=True, exist_ok=True)
         with open(output_json, "w", encoding="utf-8") as f:
             json.dump(r, f, indent=2, ensure_ascii=False)
+
+    unknown = r.get("unknown_keywords", {}) or {}
+    warnings = []
+    if unknown:
+        warnings.append(f"存在未注册关键字 {len(unknown)} 个，请补充 keyword_registry.yaml")
+
+    summary = [
+        ("网格", f"{r.get('grid', {}).get('ni')} x {r.get('grid', {}).get('nj')} x {r.get('grid', {}).get('nk')}"),
+        ("K层方向", r.get("grid", {}).get("kdir", "(未指定，CMG默认)")),
+        ("井数量", len(r.get("wells", []))),
+        ("PVT 行数", len(r.get("fluid", {}).get("pvt_table", {}).get("rows", []))),
+        ("SWT 行数", len(r.get("rockfluid", {}).get("swt_table", {}).get("rows", []))),
+        ("未知关键字数", len(unknown)),
+    ]
+
+    md_path, json_path = write_report_bundle(
+        report_dir=report_dir,
+        source_name=Path(filepath).name,
+        report_type="parse_cmg",
+        title="CMG 解析报告",
+        summary_items=summary,
+        warnings=warnings,
+        errors=[],
+        details={
+            "unknown_keywords": unknown,
+            "start_date": r.get("meta", {}).get("start_date"),
+            "unit_system": r.get("meta", {}).get("unit_system"),
+            "kdir": r.get("grid", {}).get("kdir"),
+        },
+    )
+    r["_parse_report"] = {"md": str(md_path), "json": str(json_path)}
     return r
 
 

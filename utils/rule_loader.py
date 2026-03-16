@@ -94,6 +94,14 @@ class RuleLoader:
                     return f
         return 1.0
 
+    def units_map(self):
+        """返回完整单位规则字典"""
+        return self._units
+
+    def unit_rule(self, name):
+        """按规则名返回单位规则，不存在返回 None"""
+        return self._units.get(name)
+
 
 # 模块级单例（大多数场景直接 import 使用）
 _loader = None

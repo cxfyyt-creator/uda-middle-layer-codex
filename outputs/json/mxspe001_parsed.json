@@ -3,8 +3,8 @@
     "source_software": "cmg_imex",
     "source_file": "mxspe001.dat",
     "unit_system": "field",
-    "conversion_timestamp": "2026-03-09T18:42:22.786377",
-    "start_date": "1986-04-22",
+    "conversion_timestamp": "2026-03-16T09:12:48.844404",
+    "start_date": null,
     "dtwell": 1.0
   },
   "grid": {
@@ -49,7 +49,7 @@
       "j": 1,
       "k": 1,
       "confidence": 0.99,
-      "source": "grid depth"
+      "source": "grid *DEPTH"
     }
   },
   "reservoir": {
@@ -216,21 +216,21 @@
       "value": 46.244,
       "unit": "lb/ft3",
       "confidence": 0.99,
-      "source": "fluid oil_density"
+      "source": "fluid *DENSITY *OIL 第101行"
     },
     "gas_density": {
       "type": "scalar",
       "value": 0.0647,
       "unit": "lb/ft3",
       "confidence": 0.99,
-      "source": "fluid gas_density"
+      "source": "fluid *DENSITY *GAS 第102行"
     },
     "water_density": {
       "type": "scalar",
       "value": 62.238,
       "unit": "lb/ft3",
       "confidence": 0.99,
-      "source": "fluid water_density"
+      "source": "fluid *DENSITY *WATER 第103行"
     },
     "oil_compressibility": {
       "type": "scalar",
@@ -288,47 +288,43 @@
       "columns": [
         "sw",
         "krw",
-        "krow"
+        "krow",
+        "pcow"
       ],
       "rows": [
         [
           0.12,
           0.0,
-          1.0
-        ],
-        [
-          0.82,
-          0.0,
-          0.0
+          1.0,
+          0.82
         ]
       ],
       "confidence": 0.99,
-      "source": "rockfluid *SWT"
+      "source": "rockfluid swt_table"
     },
     "slt_table": {
       "type": "table",
       "columns": [
         "sl",
         "krg",
-        "krog"
+        "krog",
+        "pcog"
       ],
       "rows": [
         [
           0.12,
           0.984,
-          0.0
+          0.0,
+          0.15
         ],
         [
-          0.15,
           0.98,
-          0.0
-        ],
-        [
+          0.0,
           0.3,
-          0.94,
-          0.0
+          0.94
         ],
         [
+          0.0,
           0.4,
           0.87,
           0.0001
@@ -336,19 +332,17 @@
         [
           0.5,
           0.72,
-          0.001
-        ],
-        [
-          0.55,
-          0.6,
-          0.01
+          0.001,
+          0.55
         ],
         [
           0.6,
-          0.41,
-          0.021
+          0.01,
+          0.6,
+          0.41
         ],
         [
+          0.021,
           0.7,
           0.19,
           0.09
@@ -356,19 +350,17 @@
         [
           0.75,
           0.125,
-          0.2
+          0.2,
+          0.8
         ],
         [
-          0.8,
           0.075,
-          0.35
-        ],
-        [
+          0.35,
           0.88,
-          0.025,
-          0.7
+          0.025
         ],
         [
+          0.7,
           0.95,
           0.005,
           0.98
@@ -376,21 +368,18 @@
         [
           0.98,
           0.0,
-          0.997
+          0.997,
+          0.999
         ],
         [
-          0.999,
           0.0,
-          1.0
-        ],
-        [
           1.0,
-          0.0,
-          1.0
+          1.0,
+          0.0
         ]
       ],
       "confidence": 0.99,
-      "source": "rockfluid *SLT"
+      "source": "rockfluid slt_table"
     }
   },
   "initial": {
@@ -442,56 +431,74 @@
     "max_steps": {
       "type": "scalar",
       "value": 100.0,
-      "unit": "–",
+      "unit": null,
       "confidence": 0.99,
       "source": "numerical max_steps 第159行"
     }
   },
-  "wells": [
-    {
-      "well_name": "Injector",
-      "well_type": "INJECTOR",
-      "well_index": 1,
-      "bhp_max": 20000.0,
-      "bhp_min": null,
-      "rate_max": 100000000.0,
-      "rate_min": null,
-      "perforations": [
-        {
-          "i": 1,
-          "j": 1,
-          "k": 3,
-          "wi": 100000.0,
-          "perf_type": "PERF"
-        }
-      ],
-      "well_radius": null,
-      "alter_schedule": [],
-      "source": "WELL 第172行"
-    },
-    {
-      "well_name": "Producer",
-      "well_type": "PRODUCER",
-      "well_index": 2,
-      "bhp_max": null,
-      "bhp_min": 1000.0,
-      "rate_max": 20000.0,
-      "rate_min": null,
-      "perforations": [
-        {
-          "i": 10,
-          "j": 10,
-          "k": 1,
-          "wi": 1.0,
-          "perf_type": "PERF"
-        }
-      ],
-      "well_radius": 0.25,
-      "alter_schedule": [],
-      "source": "WELL 第184行",
-      "geofac": 0.34,
-      "wfrac": 1.0,
-      "skin": 0.0
-    }
-  ]
+  "wells": [],
+  "unknown_keywords": {
+    "RESULTS": [],
+    "SIMULATOR": [],
+    "IMEX": [],
+    "'FIRST": [],
+    "SPE": [],
+    "COMPARATIVE": [],
+    "SOLUTION": [],
+    "PROJECT'": [],
+    "'(SEE": [],
+    "ODEH,": [],
+    "A.S.,": [],
+    "J.P.T.,": [],
+    "33,": [],
+    "PP.13-25,": [],
+    "1981.)'": [],
+    "10": [],
+    "*ITER": [],
+    "*BRIEF": [],
+    "*RES": [],
+    "*NONE": [],
+    "*TABLES": [],
+    "*SG": [],
+    "*PRES": [],
+    "*BPP": [],
+    "*IMEXMAP": [],
+    "1": [],
+    "*BLACKOIL": [],
+    "*NORM": [],
+    "*PRESS": [],
+    "1000.0": [],
+    "*SATUR": [],
+    "0.20": [],
+    "*AIM": [],
+    "*THRESH": [],
+    "0.25": [],
+    ".25": [],
+    "1986": [],
+    "04": [],
+    "22": [],
+    "'INJECTOR'": [],
+    "*UNWEIGHT": [],
+    "*GAS": [],
+    "*MAX": [],
+    "*STG": [],
+    "1.0E+8": [],
+    "*BHP": [],
+    "20000.0": [],
+    "*MONITOR": [],
+    "*BACKFLOW": [],
+    "3": [],
+    "1.0E+5": [],
+    "2": [],
+    "'PRODUCER'": [],
+    "*STO": [],
+    "*MIN": [],
+    "*GOR": [],
+    "*K": [],
+    "0.34": [],
+    "1.0": [],
+    "0.0": [],
+    "*GEO": [],
+    "3650.0": []
+  }
 }
