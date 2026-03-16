@@ -4,6 +4,7 @@
 # =============================================================================
 
 import sys
+import json
 import argparse
 from pathlib import Path
 
@@ -13,6 +14,19 @@ from parsers.petrel_parser       import parse_petrel
 from parsers.cmg_parser          import parse_cmg
 from generators.cmg_generator    import generate_cmg
 from generators.petrel_generator import generate_petrel
+from transformers                 import transform_raw_to_standard
+from validators                   import validate_standard_model
+
+
+def _transform_and_validate(raw):
+    standard = transform_raw_to_standard(raw)
+    validate_standard_model(standard, strict=True)
+    return standard
+
+
+def _load_json_file(path: Path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def cmd_parse_petrel(args):
@@ -20,7 +34,13 @@ def cmd_parse_petrel(args):
     out_dir = Path(args.output) if args.output else Path("outputs/json")
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{src.stem}_parsed.json"
-    d = parse_petrel(src, str(out))
+
+    raw = parse_petrel(src)
+    d = _transform_and_validate(raw)
+
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(d, f, indent=2, ensure_ascii=False)
+
     g = d["grid"]
     print(f"parse-petrel OK")
     print(f"  Grid: {g.get('ni')} x {g.get('nj')} x {g.get('nk')}  type={g.get('grid_type')}")
@@ -28,10 +48,7 @@ def cmd_parse_petrel(args):
     print(f"  PVDG rows: {len(d['fluid'].get('pvdg_table',{}).get('rows',[]))}")
     print(f"  SWFN rows: {len(d['rockfluid'].get('swfn_table',{}).get('rows',[]))}")
     print(f"  Wells: {len(d['wells'])}")
-    print(f"  Sim days: {d.get('_total_sim_time', 0):.1f}")
-    unk = list(d.get("unknown_keywords", {}).keys())
-    if unk:
-        print(f"  Unknown keywords: {unk}")
+    print(f"  Timeline events: {len(d.get('timeline_events', []))}")
     print(f"  JSON: {out}")
 
 
@@ -40,12 +57,19 @@ def cmd_parse_cmg(args):
     out_dir = Path(args.output) if args.output else Path("outputs/json")
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{src.stem}_parsed.json"
-    d = parse_cmg(src, str(out))
+
+    raw = parse_cmg(src)
+    d = _transform_and_validate(raw)
+
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(d, f, indent=2, ensure_ascii=False)
+
     g = d["grid"]
     print(f"parse-cmg OK")
     print(f"  Grid: {g.get('ni')} x {g.get('nj')} x {g.get('nk')}  type={g.get('grid_type')}")
     print(f"  PVT rows: {len(d['fluid'].get('pvt_table',{}).get('rows',[]))}")
     print(f"  Wells: {len(d['wells'])}")
+    print(f"  Timeline events: {len(d.get('timeline_events', []))}")
     print(f"  JSON: {out}")
 
 
@@ -55,7 +79,12 @@ def cmd_generate_cmg(args):
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = src.stem.replace("_parsed", "")
     out = out_dir / f"{stem}_converted.dat"
-    generate_cmg(src, str(out))
+
+    raw_or_standard = _load_json_file(src)
+    data = raw_or_standard if raw_or_standard.get("uda_version") else _transform_and_validate(raw_or_standard)
+    validate_standard_model(data, strict=True)
+
+    generate_cmg(data, str(out))
     print(f"generate-cmg OK  ->  {out}")
 
 
@@ -65,7 +94,12 @@ def cmd_generate_petrel(args):
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = src.stem.replace("_parsed", "")
     out = out_dir / f"{stem}_converted.DATA"
-    generate_petrel(src, str(out))
+
+    raw_or_standard = _load_json_file(src)
+    data = raw_or_standard if raw_or_standard.get("uda_version") else _transform_and_validate(raw_or_standard)
+    validate_standard_model(data, strict=True)
+
+    generate_petrel(data, str(out))
     print(f"generate-petrel OK  ->  {out}")
 
 

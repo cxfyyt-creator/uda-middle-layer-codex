@@ -9,6 +9,7 @@
 import re
 import json
 import sys
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -62,6 +63,8 @@ class CMGParser:
         self.tokens = []
         self.pos = 0
         self._rl = get_loader()
+        self.logger = logging.getLogger(__name__)
+        self.unparsed_blocks = []
 
     # ── Token 管理 ────────────────────────────────────────────────────────────
 
@@ -88,6 +91,17 @@ class CMGParser:
         if self.pos > 0:
             return self.tokens[self.pos - 1][0]
         return 0
+
+    def _record_unparsed(self, lineno, text, reason=""):
+        msg = f"未解析内容 line={lineno}: {text}"
+        if reason:
+            msg += f" | reason={reason}"
+        self.logger.warning(msg)
+        self.unparsed_blocks.append({
+            "line": lineno,
+            "text": str(text),
+            "reason": reason,
+        })
 
     # ── 基础读取 ──────────────────────────────────────────────────────────────
 
@@ -179,7 +193,7 @@ class CMGParser:
             self.pos += 1
             R[section][key] = _scalar(_to_float(tok), unit, src)
         except ValueError:
-            pass
+            self._record_unparsed(self._last_lineno(), tok, reason=f"invalid scalar for {key}")
 
     # ── 通用 handler：pvt6（6列PVT表）────────────────────────────────────────
 
@@ -298,7 +312,7 @@ class CMGParser:
                 int(t[1])
                 self.pos += 1
             except ValueError:
-                pass
+                self._record_unparsed(t[0], t[1], reason="expected integer after *RPT")
 
     # ── 通用 handler：skip_modifiers ─────────────────────────────────────────
 
@@ -643,7 +657,7 @@ class CMGParser:
                                 R["meta"]["dtwell"] = _to_float(t2[1])
                                 self.pos += 1
                             except ValueError:
-                                pass
+                                self._record_unparsed(t2[0], t2[1], reason="invalid *DTWELL value")
                     else:
                         self._handle_scalar_inline(entry, R)
                 elif fmt == "pvt6":
@@ -672,12 +686,16 @@ class CMGParser:
                     else:
                         handler(R)
             else:
-                # 未注册关键字，记录后静默跳过
+                # 未注册关键字，记录并保留上下文
+                self._record_unparsed(lineno, tok, reason="unknown keyword")
                 if u not in unknown_keys:
                     unknown_keys.append(u)
 
         if unknown_keys:
             R["unknown_keywords"] = {k: [] for k in unknown_keys}
+
+        if self.unparsed_blocks:
+            R["unparsed_blocks"] = self.unparsed_blocks
 
         R.pop("_current_time", None)
         return R

@@ -10,6 +10,7 @@ import re
 import json
 import copy
 import sys
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -114,8 +115,23 @@ class PetrelParser:
         self.pos = 0
         self._current_time = 0.0
         self._rl = get_loader()
+        self.logger = logging.getLogger(__name__)
+        self.unparsed_blocks = []
+
+    def _record_unparsed(self, lineno, text, reason=""):
+        msg = f"未解析内容 line={lineno}: {text}"
+        if reason:
+            msg += f" | reason={reason}"
+        self.logger.warning(msg)
+        self.unparsed_blocks.append({
+            "line": lineno,
+            "text": str(text),
+            "reason": reason,
+        })
 
     # ── 词元访问 ──────────────────────────────────────────────────────────────
+
+
 
     def _peek(self, off=0):
         i = self.pos + off
@@ -858,6 +874,7 @@ class PetrelParser:
         if tok == "/" or is_num:
             vals = self._read_floats_until_slash()
             R.setdefault("unknown_keywords", {})[keyword] = vals
+            self._record_unparsed(first[0], keyword, reason="unknown keyword")
         else:
             # 可能是纯标志或下一个关键字，不消耗
             pass
@@ -911,7 +928,7 @@ class PetrelParser:
             if u == "END":
                 break
 
-            # YAML 注册的关键字
+                        # YAML 注册的关键字
             if u in kw_map:
                 entry = kw_map[u]
                 fmt = entry["format"]
@@ -935,6 +952,10 @@ class PetrelParser:
                 # 未注册关键字：尝试自动消耗
                 self._auto_consume(u, R)
 
+
+
+        if self.unparsed_blocks:
+            R["unparsed_blocks"] = self.unparsed_blocks
         R["_total_sim_time"] = self._current_time
         return R
 

@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 from typing import List, Optional, Literal, Union
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator, ValidationError
 from enum import Enum
 import warnings
 
@@ -19,6 +19,8 @@ class SourceSoftware(str, Enum):
 class UnitSystem(str, Enum):
     FIELD  = "field"
     METRIC = "metric"
+    LAB    = "lab"
+    SI     = "si"
 
 class WellType(str, Enum):
     INJECTOR = "INJECTOR"
@@ -233,7 +235,7 @@ class PerfLocation(BaseModel):
 
 class WellBlock(BaseModel):
     well_name: str
-    well_type: WellType
+    well_type: Optional[WellType] = None
     bhp_max: Optional[float] = None
     bhp_min: Optional[float] = None
     rate_max: Optional[float] = None
@@ -254,6 +256,7 @@ class WellBlock(BaseModel):
 
 class UniversalModel(BaseModel):
     meta: MetaBlock
+    uda_version: str = "1.0.0"
     grid: Optional[GridBlock] = None
     reservoir: Optional[ReservoirBlock] = None
     fluid: Optional[FluidBlock] = None
@@ -269,3 +272,18 @@ class UniversalModel(BaseModel):
         if missing:
             warnings.warn(f"以下必要区块缺失: {missing}，模型可能不完整")
         return self
+
+
+def validate_standard_model(data: dict, *, strict: bool = True) -> UniversalModel:
+    """验证标准模型数据。
+
+    strict=True 时抛出 ValidationError，防止静默失败。
+    strict=False 时返回 None 代表验证失败。
+    """
+    try:
+        return UniversalModel.model_validate(data)
+    except ValidationError:
+        if strict:
+            raise
+        return None
+
