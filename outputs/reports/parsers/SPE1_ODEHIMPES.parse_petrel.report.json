@@ -1,8 +1,8 @@
 {
   "title": "Petrel 解析报告",
   "report_type": "parse_petrel",
-  "source_name": "SPE1_ODEHIMPLI.DATA",
-  "created_at": "2026-03-18 09:32:23",
+  "source_name": "SPE1_ODEHIMPES.DATA",
+  "created_at": "2026-03-18 09:32:22",
   "summary": [
     {
       "name": "网格",
@@ -26,7 +26,7 @@
     },
     {
       "name": "累计模拟天数",
-      "value": "1200.00"
+      "value": "1216.00"
     }
   ],
   "warnings": [],

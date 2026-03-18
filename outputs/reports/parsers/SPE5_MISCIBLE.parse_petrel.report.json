@@ -1,0 +1,57 @@
+{
+  "title": "Petrel 解析报告",
+  "report_type": "parse_petrel",
+  "source_name": "SPE5_MISCIBLE.DATA",
+  "created_at": "2026-03-18 10:10:06",
+  "summary": [
+    {
+      "name": "网格",
+      "value": "7 x 7 x 3"
+    },
+    {
+      "name": "井数量",
+      "value": 3
+    },
+    {
+      "name": "PVTO 行数",
+      "value": 17
+    },
+    {
+      "name": "PVDG 行数",
+      "value": 14
+    },
+    {
+      "name": "未知关键字数",
+      "value": 2
+    },
+    {
+      "name": "累计模拟天数",
+      "value": "7300.00"
+    }
+  ],
+  "warnings": [
+    "存在未注册关键字 2 个，请补充 keyword_registry.yaml"
+  ],
+  "errors": [],
+  "details": {
+    "unknown_keywords": {
+      "OPTIONS": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "YEAR": [
+        20.0
+      ]
+    },
+    "start_date": "1986-01-01",
+    "unit_system": "field"
+  }
+}

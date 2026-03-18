@@ -6,6 +6,7 @@ from models.standard_model import StandardModel
 from business_rules import (
     apply_radial_perm_j,
     derive_pb,
+    enrich_miscible_model,
     ensure_co_cvo,
     merge_pvt_saturated_only,
     merge_rockfluid_tables,
@@ -62,6 +63,7 @@ def transform_raw_to_standard(raw: Dict[str, Any]) -> Dict[str, Any]:
     fluid.setdefault("oil_viscosity_coeff", cvo_obj)
 
     initial.setdefault("bubble_point_pressure", derive_pb(initial, fluid))
+    fluid, initial = enrich_miscible_model(fluid, rockfluid, initial, raw.get("meta", {}))
 
     model = StandardModel(
         meta=dict(raw.get("meta", {})),

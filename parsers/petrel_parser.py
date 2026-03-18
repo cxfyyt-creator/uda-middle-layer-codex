@@ -569,6 +569,12 @@ class PetrelParser:
             R["reservoir"]["rock_ref_pressure"] = _scalar(vals[0], "psia", "PROPS ROCK")
             R["reservoir"]["rock_compressibility"] = _scalar(vals[1], "1/psi", "PROPS ROCK")
 
+    def _parse_miscible(self, R):
+        """MISCIBLE 关键字：作为模型标志，不消费后续数据。"""
+        R["meta"]["model_type"] = "miscible"
+        R["fluid"]["model"] = "MISCIBLE"
+
+
     def _parse_density(self, R):
         vals = self._read_floats_until_slash()
         if len(vals) >= 3:

@@ -13,6 +13,7 @@ petrel:
     GAS:     {format: flag, json: {section: meta, key: fluid_gas}, value: true}
     DISGAS:  {format: flag, json: {section: meta, key: fluid_disgas}, value: true}
     RADIAL:  {format: flag, json: {section: grid, key: grid_type}, value: RADIAL}
+    MISCIBLE: {format: custom, handler: _parse_miscible}
 
     TITLE:     {format: custom, handler: _parse_title}
     WELLDIMS:  {format: skip_slash}
@@ -80,12 +81,15 @@ petrel:
     PVTW:    {format: custom, handler: _parse_pvtw}
     DENSITY: {format: custom, handler: _parse_density}
     ROCK:    {format: custom, handler: _parse_rock}
+    SDENSITY: {format: scalar, json: {section: fluid, key: solvent_density}, unit: "lb/ft3"}
+    TLMIXPAR: {format: scalar, json: {section: fluid, key: tlmixpar}, unit: ""}
 
     SWOF:    {format: table, json: {section: rockfluid, key: swof_table}, columns: [sw, krw, krow, pcow], ncols: 4}
     SGOF:    {format: table, json: {section: rockfluid, key: sgof_table}, columns: [sg, krg, krog, pcog], ncols: 4}
     SWFN:    {format: table, json: {section: rockfluid, key: swfn_table}, columns: [sw, krw, pcow], ncols: 3}
     SGFN:    {format: table, json: {section: rockfluid, key: sgfn_table}, columns: [sg, krg, pcog], ncols: 3}
     SOF3:    {format: table, json: {section: rockfluid, key: sof3_table}, columns: [so, krow, krog], ncols: 3}
+    SOF2:    {format: table, json: {section: rockfluid, key: sof2_table}, columns: [so, krog], ncols: 2}
 
     EQUIL:   {format: custom, handler: _parse_equil}
     RSVD:    {format: custom, handler: _parse_rsvd}
@@ -106,7 +110,6 @@ cmg:
     - "*BLOCK_CENTER"
     - "*WATER_OIL_GAS"
     - "*USER_INPUT"
-    - "*MODEL"
     - "*ROCKFLUID"
     - "*NUMERICAL"
     - "*INITIAL"
@@ -140,6 +143,8 @@ cmg:
     "*PRPOR":     {format: scalar_inline, json: {section: reservoir, key: rock_ref_pressure},    unit: psia}
 
     "*PVT":       {format: pvt6}
+    "*PVTS":      {format: table, json: {section: fluid, key: pvts_table}, columns: [p, rss, es, viss, omega_s], ncols: 5}
+    "*MODEL":     {format: custom, handler: _parse_model}
     "*DENSITY":   {format: density_typed}
     "*BWI":       {format: scalar_inline, json: {section: fluid, key: water_fvf}, unit: "RB/STB"}
     "*CW":        {format: scalar_inline, json: {section: fluid, key: water_compressibility}, unit: "1/psi"}
@@ -148,6 +153,8 @@ cmg:
     "*CVW":       {format: scalar_inline, json: {section: fluid, key: water_viscosity_coeff}, unit: "1/psi"}
     "*CO":        {format: scalar_inline, json: {section: fluid, key: oil_compressibility}, unit: "1/psi"}
     "*CVO":       {format: scalar_inline, json: {section: fluid, key: oil_viscosity_coeff}, unit: "1/psi"}
+    "*OMEGASG":   {format: scalar_inline, json: {section: fluid, key: omegasg}, unit: ""}
+    "*MINSS":     {format: scalar_inline, json: {section: fluid, key: minss}, unit: "fraction"}
 
     "*RPT":       {format: skip_int}
     "*SWT":       {format: rpt_table, json: {section: rockfluid, key: swt_table}, columns: [sw, krw, krow, pcow]}
@@ -158,6 +165,7 @@ cmg:
     "*DWOC":      {format: scalar_inline, json: {section: initial, key: woc_depth}, unit: ft}
     "*DGOC":      {format: scalar_inline, json: {section: initial, key: goc_depth}, unit: ft}
     "*PB":        {format: array, json: {section: initial, key: bubble_point_pressure}, unit: psia}
+    "*PBS":       {format: array, json: {section: initial, key: solvent_bubble_point_pressure}, unit: psia}
 
     "*DTMAX":     {format: scalar_inline, json: {section: numerical, key: max_timestep}, unit: day}
     "*MAXSTEPS":  {format: scalar_inline, json: {section: numerical, key: max_steps}, unit: null}
@@ -198,6 +206,7 @@ generators:
       oil_density:           {keyword: "*DENSITY *OIL", format: scalar_inline}
       gas_density:           {keyword: "*DENSITY *GAS", format: scalar_inline}
       water_density:         {keyword: "*DENSITY *WATER", format: scalar_inline}
+      solvent_density:       {keyword: "*DENSITY *SOLVENT", format: scalar_inline}
       water_fvf:             {keyword: "*BWI", format: scalar_inline}
       water_compressibility: {keyword: "*CW", format: scalar_inline}
       water_ref_pressure:    {keyword: "*REFPW", format: scalar_inline}
@@ -205,6 +214,8 @@ generators:
       water_viscosity_coeff: {keyword: "*CVW", format: scalar_inline}
       oil_compressibility:   {keyword: "*CO", format: scalar_inline}
       oil_viscosity_coeff:   {keyword: "*CVO", format: scalar_inline}
+      omegasg:               {keyword: "*OMEGASG", format: scalar_inline}
+      minss:                 {keyword: "*MINSS", format: scalar_inline}
 
     rockfluid:
       swt_table: {keyword: "*SWT", format: rpt_table}
@@ -216,6 +227,7 @@ generators:
       woc_depth:             {keyword: "*DWOC", format: scalar_inline}
       goc_depth:             {keyword: "*DGOC", format: scalar_inline}
       bubble_point_pressure: {keyword: "*PB", format: array}
+      solvent_bubble_point_pressure: {keyword: "*PBS", format: array}
 
     numerical:
       max_timestep: {keyword: "*DTMAX", format: scalar_inline}

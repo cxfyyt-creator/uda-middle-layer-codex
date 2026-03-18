@@ -1,0 +1,9 @@
+version: 1.0.0
+schema: v1
+
+models:
+  - name: xyai Codex
+    provider: openai
+    model: gpt-5.3-codex
+    apiKey: sk-G6ssamaDee6vKbLhmGhWS5rUJGyad2Rp
+    apiBase: https://new.xychatai.com/codex/v1

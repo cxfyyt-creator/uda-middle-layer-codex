@@ -227,6 +227,36 @@ class CMGParser:
         if rows:
             R["fluid"]["pvt_table"] = _table(cols, rows, "fluid *PVT")
 
+    def _handle_table(self, entry, R):
+        """通用n列浮点表，直到下一个*关键字。"""
+        json_spec = entry["json"]
+        cols = entry.get("columns", [])
+        ncols = int(entry.get("ncols", len(cols) or 1))
+        src = f"{json_spec['section']} {json_spec['key']}"
+
+        nums = []
+        while self._peek():
+            _, tok = self._peek()
+            if _is_kw(tok):
+                break
+            self.pos += 1
+            expanded = _expand_repeat(tok)
+            if expanded:
+                nums.extend(expanded)
+                continue
+            try:
+                nums.append(_to_float(tok))
+            except ValueError:
+                pass
+
+        rows = []
+        i = 0
+        while i + ncols - 1 < len(nums):
+            rows.append(nums[i:i + ncols])
+            i += ncols
+        if rows:
+            R[json_spec["section"]][json_spec["key"]] = _table(cols, rows, src)
+
     # ── 通用 handler：rpt_table（相渗表）────────────────────────────────────
 
     def _handle_rpt_table(self, entry, R):
@@ -581,7 +611,7 @@ class CMGParser:
             R["meta"]["start_date"] = "-".join(parts)
 
     def _parse_density_typed(self, R):
-        """*DENSITY *OIL/*GAS/*WATER value"""
+        """*DENSITY *OIL/*GAS/*WATER/*SOLVENT value"""
         t = self._peek()
         if not t or not _is_kw(t[1]):
             return
@@ -597,11 +627,21 @@ class CMGParser:
             return
         lineno = self._last_lineno()
         src = f"fluid *DENSITY *{dtype_u} 第{lineno}行"
-        key_map = {"OIL": "oil_density", "GAS": "gas_density", "WATER": "water_density"}
-        unit_map = {"OIL": "lb/ft3", "GAS": "lb/ft3", "WATER": "lb/ft3"}
+        key_map = {"OIL": "oil_density", "GAS": "gas_density", "WATER": "water_density", "SOLVENT": "solvent_density"}
+        unit_map = {"OIL": "lb/ft3", "GAS": "lb/ft3", "WATER": "lb/ft3", "SOLVENT": "lb/ft3"}
         key = key_map.get(dtype_u)
         if key:
             R["fluid"][key] = _scalar(val, unit_map.get(dtype_u, "lb/ft3"), src)
+
+    def _parse_model(self, R):
+        """*MODEL *BLACKOIL/*MISNCG/..."""
+        t = self._peek()
+        if t and _is_kw(t[1]):
+            _, model_kw = self._next()
+            model = model_kw.lstrip("*").upper()
+            R["fluid"]["model"] = model
+            if model.startswith("MIS"):
+                R["meta"]["model_type"] = "miscible"
 
     # ── 主解析流程 ────────────────────────────────────────────────────────────
 
@@ -662,6 +702,8 @@ class CMGParser:
                         self._handle_scalar_inline(entry, R)
                 elif fmt == "pvt6":
                     self._handle_pvt6(R)
+                elif fmt == "table":
+                    self._handle_table(entry, R)
                 elif fmt == "density_typed":
                     self._parse_density_typed(R)
                 elif fmt == "rpt_table":

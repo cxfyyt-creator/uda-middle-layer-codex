@@ -5,6 +5,29 @@ from typing import Any, Dict, List, Optional, Tuple
 from utils.rule_loader import get_loader
 
 
+def _scalar_obj(value: float, unit: str, *, modifier: Optional[str] = None, source: str = "business_rules") -> Dict[str, Any]:
+    obj = {
+        "type": "scalar",
+        "value": float(value),
+        "unit": unit,
+        "source": source,
+        "confidence": 0.9,
+    }
+    if modifier:
+        obj["modifier"] = modifier
+    return obj
+
+
+def _table_obj(columns: List[str], rows: List[List[float]], *, source: str) -> Dict[str, Any]:
+    return {
+        "type": "table",
+        "columns": columns,
+        "rows": rows,
+        "source": source,
+        "confidence": 0.9,
+    }
+
+
 def _factor(rule_name: str, default: float = 1.0) -> float:
     rl = get_loader()
     rule = rl.unit_rule(rule_name) or {}
@@ -98,75 +121,134 @@ def _interp1d(x: float, xs: List[float], ys: List[float]) -> float:
 
 
 def _merge_swt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """SWFN(sw,krw,pcow) + SOF3(so,krow,krog) → SWT(sw,krw,krow,pcow)"""
+    """SWFN(sw,krw,pcow) + SOF3/SOF2 → SWT(sw,krw,krow,pcow)"""
     swfn = rockfluid.get("swfn_table")
     sof3 = rockfluid.get("sof3_table")
+    sof2 = rockfluid.get("sof2_table")
     if not swfn:
         return None
 
     swfn_rows = swfn["rows"]
     sof3_rows = sof3["rows"] if sof3 else None
+    sof2_rows = sof2["rows"] if sof2 else None
 
     if sof3_rows:
-        sof3_so = [r[0] for r in sof3_rows]
-        sof3_krow = [r[1] for r in sof3_rows]
+        so_x = [r[0] for r in sof3_rows]
+        krow_y = [r[1] for r in sof3_rows]
+    elif sof2_rows:
+        so_x = [r[0] for r in sof2_rows]
+        krow_y = [r[1] for r in sof2_rows]
     else:
-        sof3_so = sof3_krow = None
+        so_x = krow_y = None
 
     rows = []
     for row in swfn_rows:
         sw, krw, pcow = row[0], row[1], row[2]
-        if sof3_so:
+        if so_x:
             so = 1.0 - sw
-            krow = _interp1d(so, sof3_so, sof3_krow)
+            krow = _interp1d(so, so_x, krow_y)
         else:
-            krow = 1.0 - sw
-        rows.append([sw, krw, krow, pcow])
+            krow = max(0.0, 1.0 - sw)
+        rows.append([sw, krw, max(0.0, krow), max(0.0, pcow)])
 
     return {
         "type": "table",
         "columns": ["sw", "krw", "krow", "pcow"],
         "rows": rows,
         "confidence": 0.9,
-        "source": "business_rules.merge_rockfluid_tables(swfn+sof3)",
+        "source": "business_rules.merge_rockfluid_tables(swfn+sof3/sof2)",
     }
 
 
 def _merge_slt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """SGFN(sg,krg,pcog) + SOF3(so,krow,krog) → SLT(sl,krg,krog,pcog)"""
+    """优先 SGFN(+SOF3) 生成 SLT；若缺 SGFN 但有 SWFN+SOF2，则构造保底 SLT。"""
     sgfn = rockfluid.get("sgfn_table")
+    swfn = rockfluid.get("swfn_table")
     sof3 = rockfluid.get("sof3_table")
-    if not sgfn:
-        return None
+    sof2 = rockfluid.get("sof2_table")
 
-    sgfn_rows = sgfn["rows"]
-    sof3_rows = sof3["rows"] if sof3 else None
+    # 路径1：标准 SGFN
+    if sgfn:
+        sgfn_rows = sgfn["rows"]
+        sof3_rows = sof3["rows"] if sof3 else None
 
-    if sof3_rows:
-        sof3_so = [r[0] for r in sof3_rows]
-        sof3_krog = [r[2] for r in sof3_rows]
-    else:
-        sof3_so = sof3_krog = None
-
-    rows = []
-    for row in sgfn_rows:
-        sg, krg, pcog = row[0], row[1], row[2]
-        sl = 1.0 - sg
-        if sof3_so:
-            so = 1.0 - sg
-            krog = _interp1d(so, sof3_so, sof3_krog)
+        if sof3_rows:
+            so_x = [r[0] for r in sof3_rows]
+            krog_y = [r[2] for r in sof3_rows]
         else:
-            krog = sg
-        rows.append([sl, krg, krog, pcog])
+            so_x = krog_y = None
 
-    rows.sort(key=lambda r: r[0])
-    return {
-        "type": "table",
-        "columns": ["sl", "krg", "krog", "pcog"],
-        "rows": rows,
-        "confidence": 0.9,
-        "source": "business_rules.merge_rockfluid_tables(sgfn+sof3)",
-    }
+        rows = []
+        for row in sgfn_rows:
+            sg, krg, pcog = row[0], row[1], row[2]
+            sl = 1.0 - sg
+            if so_x:
+                so = 1.0 - sg
+                krog = _interp1d(so, so_x, krog_y)
+            else:
+                krog = sg
+            rows.append([sl, max(0.0, krg), max(0.0, krog), max(0.0, pcog)])
+
+        rows.sort(key=lambda r: r[0])
+        return {
+            "type": "table",
+            "columns": ["sl", "krg", "krog", "pcog"],
+            "rows": rows,
+            "confidence": 0.9,
+            "source": "business_rules.merge_rockfluid_tables(sgfn+sof3)",
+        }
+
+    # 路径2：保底 SWFN + SOF2
+    if swfn and sof2:
+        swfn_rows = swfn["rows"]
+        sof2_rows = sorted(sof2["rows"], key=lambda r: float(r[0]))
+        swc = float(swfn_rows[0][0]) if swfn_rows else 0.0
+        sw_x = [float(r[0]) for r in swfn_rows]
+        pcow_y = [float(r[2]) for r in swfn_rows]
+
+        rows = []
+        for so, krog_raw in sof2_rows:
+            sl = min(1.0, max(swc, swc + float(so)))
+            krog = min(1.0, max(0.0, float(krog_raw)))
+            krg = min(1.0, max(0.0, 1.0 - krog))
+            pcow = _interp1d(sl, sw_x, pcow_y) if sw_x else 0.0
+            pcog = max(0.0, 0.667 * pcow)
+            rows.append([sl, krg, krog, pcog])
+
+        if rows and rows[0][0] > swc:
+            pcog0 = max(0.0, 0.667 * (_interp1d(swc, sw_x, pcow_y) if sw_x else 0.0))
+            rows.insert(0, [swc, 1.0, 0.0, pcog0])
+        if rows and rows[-1][0] < 1.0:
+            rows.append([1.0, 0.0, 1.0, 0.0])
+
+        dedup: Dict[float, List[float]] = {}
+        for sl, krg, krog, pcog in rows:
+            dedup[round(sl, 6)] = [sl, krg, krog, pcog]
+        rows = [dedup[k] for k in sorted(dedup.keys())]
+
+        running_krog = 0.0
+        running_krg = 1.0
+        for row in rows:
+            row[2] = max(running_krog, min(1.0, max(0.0, row[2])))
+            running_krog = row[2]
+            row[1] = min(running_krg, min(1.0, max(0.0, row[1])))
+            running_krg = row[1]
+
+        if rows:
+            rows[0][2] = 0.0
+            rows[0][1] = 1.0
+            rows[-1][2] = 1.0
+            rows[-1][1] = 0.0
+
+        return {
+            "type": "table",
+            "columns": ["sl", "krg", "krog", "pcog"],
+            "rows": rows,
+            "confidence": 0.8,
+            "source": "business_rules.merge_rockfluid_tables(swfn+sof2,miscible_fallback)",
+        }
+
+    return None
 
 
 def merge_rockfluid_tables(rockfluid: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
@@ -249,6 +331,112 @@ def derive_pb(initial: Dict[str, Any], fluid: Dict[str, Any]) -> Dict[str, Any]:
         return {"type": "scalar", "value": float(initial["ref_pressure"]["value"]), "unit": "psia", "modifier": "CON"}
 
     return {"type": "scalar", "value": 0.0, "unit": "psia", "modifier": "CON"}
+
+
+def is_miscible_model(fluid: Dict[str, Any], meta: Optional[Dict[str, Any]] = None) -> bool:
+    model = str(fluid.get("model", "")).upper()
+    if model.startswith("MIS"):
+        return True
+    if meta and str(meta.get("model_type", "")).lower() == "miscible":
+        return True
+    return False
+
+
+def derive_miscible_omegasg(fluid: Dict[str, Any]) -> Dict[str, Any]:
+    existing = fluid.get("omegasg")
+    if existing:
+        return existing
+
+    tlmixpar = fluid.get("tlmixpar")
+    if isinstance(tlmixpar, dict) and tlmixpar.get("value") is not None:
+        return _scalar_obj(float(tlmixpar["value"]), "", source="business_rules.derive_miscible_omegasg")
+
+    return _scalar_obj(0.7, "", source="business_rules.derive_miscible_omegasg(default)")
+
+
+def derive_miscible_minss(fluid: Dict[str, Any], rockfluid: Dict[str, Any]) -> Dict[str, Any]:
+    existing = fluid.get("minss")
+    if existing:
+        return existing
+
+    swfn = rockfluid.get("swfn_table")
+    if swfn and swfn.get("rows"):
+        swc = float(swfn["rows"][0][0])
+        return _scalar_obj(max(0.01, swc), "fraction", source="business_rules.derive_miscible_minss")
+
+    return _scalar_obj(0.05, "fraction", source="business_rules.derive_miscible_minss(default)")
+
+
+def derive_pbs(initial: Dict[str, Any], fluid: Dict[str, Any]) -> Dict[str, Any]:
+    pbs = initial.get("solvent_bubble_point_pressure")
+    if pbs:
+        return pbs
+
+    pb = initial.get("bubble_point_pressure") or derive_pb(initial, fluid)
+    if isinstance(pb, dict) and pb.get("type") == "array":
+        values = pb.get("values") or []
+        scalar_val = float(values[0]) if values else 0.0
+        return _scalar_obj(scalar_val, pb.get("unit", "psia") or "psia", modifier="CON", source="business_rules.derive_pbs")
+    if isinstance(pb, dict) and pb.get("value") is not None:
+        return _scalar_obj(float(pb["value"]), pb.get("unit", "psia") or "psia", modifier="CON", source="business_rules.derive_pbs")
+
+    return _scalar_obj(0.0, "psia", modifier="CON", source="business_rules.derive_pbs(default)")
+
+
+def derive_miscible_pvts(fluid: Dict[str, Any], initial: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    existing = fluid.get("pvts_table")
+    if existing and existing.get("rows"):
+        return existing
+
+    pvdg = fluid.get("pvdg_table")
+    if not pvdg or not pvdg.get("rows"):
+        return None
+
+    omegasg = float(derive_miscible_omegasg(fluid).get("value", 0.0))
+    pbs = derive_pbs(initial, fluid)
+    pbs_value = float(pbs.get("value", 0.0)) if isinstance(pbs, dict) else 0.0
+    p_max = max(float(row[0]) for row in pvdg["rows"])
+
+    rows: List[List[float]] = []
+    for row in pvdg["rows"]:
+        if len(row) < 3:
+            continue
+        p = float(row[0])
+        bg = float(row[1])
+        visg = float(row[2])
+        es = 0.0 if bg == 0 else 1000.0 / bg
+        if p <= pbs_value:
+            omega_s = 0.0
+        elif p_max <= pbs_value:
+            omega_s = omegasg
+        else:
+            omega_s = omegasg * (p - pbs_value) / (p_max - pbs_value)
+        rows.append([p, 0.0, es, visg, max(0.0, min(omegasg if omegasg > 0 else 1.0, omega_s))])
+
+    return _table_obj(["p", "rss", "es", "viss", "omega_s"], rows, source="business_rules.derive_miscible_pvts")
+
+
+def enrich_miscible_model(
+    fluid: Dict[str, Any],
+    rockfluid: Dict[str, Any],
+    initial: Dict[str, Any],
+    meta: Optional[Dict[str, Any]] = None,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    if not is_miscible_model(fluid, meta):
+        return fluid, initial
+
+    fluid = dict(fluid)
+    initial = dict(initial)
+
+    fluid.setdefault("omegasg", derive_miscible_omegasg(fluid))
+    fluid.setdefault("minss", derive_miscible_minss(fluid, rockfluid))
+
+    pvts = derive_miscible_pvts(fluid, initial)
+    if pvts:
+        fluid.setdefault("pvts_table", pvts)
+
+    initial.setdefault("solvent_bubble_point_pressure", derive_pbs(initial, fluid))
+    return fluid, initial
 
 
 def should_reverse_k_layers(grid: Dict[str, Any]) -> bool:

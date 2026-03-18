@@ -17,6 +17,7 @@ from business_rules import (
     apply_radial_perm_j,
     compute_depth_from_tops,
     derive_pb,
+    enrich_miscible_model,
     ensure_co_cvo,
     merge_pvt_saturated_only,
     merge_rockfluid_tables,
@@ -121,7 +122,8 @@ class CMGGenerator:
 
         reservoir = apply_radial_perm_j(grid, reservoir)
         initial = dict(initial)
-                initial["bubble_point_pressure"] = derive_pb(initial, fluid)
+        initial["bubble_point_pressure"] = derive_pb(initial, fluid)
+        fluid, initial = enrich_miscible_model(fluid, rockfluid, initial, meta)
 
         numerical = data.get("numerical", {})
         wells     = data.get("wells", [])
@@ -137,8 +139,9 @@ class CMGGenerator:
             "",
             f"*INUNIT *{meta.get('unit_system', 'field').upper()}",
             "",
-            "*WPRN *WELL *TIME",
+                        "*WPRN *WELL *TIME",
             "*OUTSRF *WELL *ALL",
+            "*OUTSRF *GRID *ALL",
             "",
         ]
 
@@ -160,8 +163,12 @@ class CMGGenerator:
         lines.append("** ============================================================")
         lines.append("** FLUID")
         lines.append("** ============================================================")
-        lines.append("*MODEL *BLACKOIL")
+        model = str(fluid.get("model", "BLACKOIL")).upper()
+        if model == "MISCIBLE":
+            model = "MISNCG"
+        lines.append(f"*MODEL *{model}")
         self._write_fluid(lines, fluid)
+
         lines.append("")
 
         # ── ROCKFLUID ─────────────────────────────────────────────────────────
@@ -194,7 +201,7 @@ class CMGGenerator:
         lines.append("** WELL DATA")
         lines.append("** ============================================================")
         lines.append("*RUN")
-                self._write_wells(lines, wells, data.get("meta", {}), timeline_events)
+        self._write_wells(lines, wells, data.get("meta", {}), timeline_events)
 
         self._write_unparsed_blocks(lines, data.get("unparsed_blocks", []))
         lines.append("*STOP")
@@ -322,6 +329,8 @@ class CMGGenerator:
     # ── 流体写入 ──────────────────────────────────────────────────────────────
 
     def _write_fluid(self, lines, fluid):
+        model = str(fluid.get("model", "BLACKOIL")).upper()
+
         pvt = _merge_pvt(fluid)
         if pvt:
             lines.append("")
@@ -329,6 +338,15 @@ class CMGGenerator:
             lines.append(f"** {'p':>12} {'rs':>12} {'bo':>12} {'eg':>12} {'viso':>12} {'visg':>12}")
             for row in pvt["rows"]:
                 lines.append("  " + "".join(_fmt(v) for v in row))
+
+        if model.startswith("MIS"):
+            pvts = fluid.get("pvts_table")
+            if pvts and pvts.get("rows"):
+                lines.append("")
+                lines.append("*PVTS")
+                lines.append(f"** {'p':>12} {'rss':>12} {'es':>12} {'viss':>12} {'omega_s':>12}")
+                for row in pvts["rows"]:
+                    lines.append("  " + "".join(_fmt(v) for v in row))
 
         co_obj, cvo_obj = ensure_co_cvo(fluid)
         fluid = dict(fluid)
@@ -349,6 +367,7 @@ class CMGGenerator:
             if val is None:
                 continue
             lines.append(f"{kw}  {_fmt(val).strip()}")
+
 
     # ── 相渗写入 ──────────────────────────────────────────────────────────────
 
@@ -432,17 +451,17 @@ class CMGGenerator:
                     lines.append(f"  {p['i']}  {p['j']}  {p['k']}  {_fmt(wi).strip()}")
             lines.append("")
 
-                # 动态调度（ALTER）
+        # 动态调度（ALTER）
         self._write_schedule(lines, wells, meta, timeline_events or [])
 
     def _write_schedule(self, lines, wells, meta, timeline_events):
         """
         将 alter_schedule 中的时间点汇总，按时间顺序写 *TIME/*ALTER。
         支持两种来源：
-          CMG来源: {time: float, rate: float}
-          Petrel来源: {time: float, target: str, value: float}
+          timeline_events来源: {absolute_days: float, value: float}
+          兜底来源: well.alter_schedule
         """
-                # 收集所有 (time, well_idx, entry) 事件
+        # 收集所有 (time, well_idx, entry, well) 事件
         events = []
         if timeline_events:
             well_idx_map = {
@@ -466,6 +485,8 @@ class CMGGenerator:
                     events.append((t, idx, ev, w))
 
         if not events:
+            total = meta.get("_total_sim_time", 0.0) or 3650.0
+            lines.append(f"*TIME  {total:.2f}")
             return
 
         events.sort(key=lambda e: e[0])
@@ -479,7 +500,7 @@ class CMGGenerator:
             if t != current_time:
                 lines.append(f"*TIME  {t:.2f}")
                 current_time = t
-                        for _, idx, ev, w in group:
+            for _, idx, ev, w in group:
                 if "rate" in ev:
                     rate = ev["rate"]
                     lines.append("*ALTER")
@@ -497,7 +518,7 @@ class CMGGenerator:
                     lines.append(f"  {idx}")
                     lines.append(f"  {_fmt(ev['value']).strip()}")
 
-                # 结束时间
+        # 结束时间
         total_time = meta.get("_total_sim_time", 0.0)
         if not total_time:
             total_time = current_time + 3650.0

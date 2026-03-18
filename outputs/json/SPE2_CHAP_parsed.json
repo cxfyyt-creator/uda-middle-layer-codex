@@ -1,9 +1,10 @@
 {
+  "uda_version": "1.0.0",
   "meta": {
     "source_software": "petrel_eclipse",
     "source_file": "SPE2_CHAP.DATA",
     "unit_system": "field",
-    "conversion_timestamp": "2026-03-13T20:46:35.855488",
+    "conversion_timestamp": "2026-03-18T09:36:32.532675",
     "start_date": "1982-01-01",
     "fluid_oil": true,
     "fluid_water": true,
@@ -189,6 +190,31 @@
       "unit": "1/psi",
       "confidence": 0.99,
       "source": "PROPS ROCK"
+    },
+    "perm_j": {
+      "type": "array",
+      "values": [
+        35.0,
+        47.5,
+        148.0,
+        202.0,
+        90.0,
+        418.5,
+        775.0,
+        60.0,
+        682.0,
+        472.0,
+        125.0,
+        300.0,
+        137.5,
+        191.0,
+        350.0
+      ],
+      "unit": "md",
+      "grid_order": "IJK",
+      "confidence": 0.99,
+      "source": "EQUALS PERMR",
+      "modifier": "KVAR"
     }
   },
   "fluid": {
@@ -450,6 +476,143 @@
       ],
       "confidence": 0.99,
       "source": "PROPS PVTO"
+    },
+    "pvt_table": {
+      "type": "table",
+      "columns": [
+        "p",
+        "rs",
+        "bo",
+        "eg",
+        "viso",
+        "visg"
+      ],
+      "rows": [
+        [
+          400.0,
+          165.0,
+          1.012,
+          169.4915254237288,
+          1.17,
+          0.013
+        ],
+        [
+          800.0,
+          335.0,
+          1.0255,
+          338.9830508474576,
+          1.14,
+          0.0135
+        ],
+        [
+          1200.0,
+          500.0,
+          1.038,
+          510.2040816326531,
+          1.11,
+          0.014
+        ],
+        [
+          1600.0,
+          665.0,
+          1.051,
+          680.2721088435375,
+          1.08,
+          0.0145
+        ],
+        [
+          2000.0,
+          828.0,
+          1.063,
+          847.4576271186442,
+          1.06,
+          0.015
+        ],
+        [
+          2400.0,
+          985.0,
+          1.075,
+          1020.4081632653061,
+          1.03,
+          0.0155
+        ],
+        [
+          2800.0,
+          1130.0,
+          1.087,
+          1190.4761904761906,
+          1.0,
+          0.016
+        ],
+        [
+          3200.0,
+          1270.0,
+          1.0985,
+          1351.3513513513515,
+          0.98,
+          0.0165
+        ],
+        [
+          3600.0,
+          1390.0,
+          1.11,
+          1538.4615384615383,
+          0.95,
+          0.017
+        ],
+        [
+          4000.0,
+          1500.0,
+          1.12,
+          1694.9152542372883,
+          0.94,
+          0.0175
+        ],
+        [
+          4400.0,
+          1600.0,
+          1.13,
+          1851.8518518518517,
+          0.92,
+          0.018
+        ],
+        [
+          4800.0,
+          1676.0,
+          1.14,
+          2040.8163265306123,
+          0.91,
+          0.0185
+        ],
+        [
+          5200.0,
+          1750.0,
+          1.148,
+          2222.222222222222,
+          0.9,
+          0.019
+        ],
+        [
+          5600.0,
+          1810.0,
+          1.155,
+          2380.952380952381,
+          0.89,
+          0.0195
+        ]
+      ],
+      "source": "business_rules.merge_pvt_saturated_only",
+      "confidence": 0.99
+    },
+    "oil_compressibility": {
+      "type": "scalar",
+      "value": 8.654998223843746e-06,
+      "unit": "1/psi"
+    },
+    "oil_viscosity_coeff": {
+      "type": "scalar",
+      "value": 0.0,
+      "unit": "1/psi"
     }
   },
   "rockfluid": {
@@ -638,6 +801,140 @@
       ],
       "confidence": 0.99,
       "source": "rockfluid sof3_table"
+    },
+    "swt_table": {
+      "type": "table",
+      "columns": [
+        "sw",
+        "krw",
+        "krow",
+        "pcow"
+      ],
+      "rows": [
+        [
+          0.22,
+          0.0,
+          1.0,
+          7.0
+        ],
+        [
+          0.3,
+          0.07,
+          0.4,
+          4.0
+        ],
+        [
+          0.4,
+          0.15,
+          0.125,
+          3.0
+        ],
+        [
+          0.5,
+          0.24,
+          0.0649,
+          2.5
+        ],
+        [
+          0.6,
+          0.33,
+          0.0048,
+          2.0
+        ],
+        [
+          0.8,
+          0.65,
+          0.0,
+          1.0
+        ],
+        [
+          0.9,
+          0.83,
+          0.0,
+          0.5
+        ],
+        [
+          1.0,
+          1.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "confidence": 0.9,
+      "source": "business_rules.merge_rockfluid_tables(swfn+sof3/sof2)"
+    },
+    "slt_table": {
+      "type": "table",
+      "columns": [
+        "sl",
+        "krg",
+        "krog",
+        "pcog"
+      ],
+      "rows": [
+        [
+          0.21999999999999997,
+          1.0,
+          0.0,
+          3.9
+        ],
+        [
+          0.30000000000000004,
+          0.8125,
+          0.0,
+          3.5
+        ],
+        [
+          0.4,
+          0.5,
+          0.004,
+          3.0
+        ],
+        [
+          0.5,
+          0.42,
+          0.036,
+          2.5
+        ],
+        [
+          0.6,
+          0.34,
+          0.146,
+          2.0
+        ],
+        [
+          0.7,
+          0.24,
+          0.42,
+          1.5
+        ],
+        [
+          0.8,
+          0.1,
+          1.0,
+          1.0
+        ],
+        [
+          0.9,
+          0.022,
+          1.0,
+          0.5
+        ],
+        [
+          0.96,
+          0.0,
+          1.0,
+          0.2
+        ],
+        [
+          1.0,
+          0.0,
+          1.0,
+          0.0
+        ]
+      ],
+      "confidence": 0.9,
+      "source": "business_rules.merge_rockfluid_tables(sgfn+sof3)"
     }
   },
   "initial": {
@@ -668,6 +965,12 @@
       "unit": "ft",
       "confidence": 0.99,
       "source": "SOLUTION EQUIL"
+    },
+    "bubble_point_pressure": {
+      "type": "scalar",
+      "value": 3600.0,
+      "unit": "psia",
+      "modifier": "CON"
     }
   },
   "numerical": {},
@@ -723,5 +1026,28 @@
       "source": "SCHEDULE WELSPECS"
     }
   ],
-  "_total_sim_time": 900.0
+  "timeline_events": [
+    {
+      "well_name": "P1",
+      "absolute_days": 10.0,
+      "event_type": "WELL_TARGET_CHANGE",
+      "target": "ORAT",
+      "value": 100.0
+    },
+    {
+      "well_name": "P1",
+      "absolute_days": 50.0,
+      "event_type": "WELL_TARGET_CHANGE",
+      "target": "ORAT",
+      "value": 1000.0
+    },
+    {
+      "well_name": "P1",
+      "absolute_days": 720.0,
+      "event_type": "WELL_TARGET_CHANGE",
+      "target": "ORAT",
+      "value": 100.0
+    }
+  ],
+  "unparsed_blocks": []
 }

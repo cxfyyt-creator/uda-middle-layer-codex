@@ -1,9 +1,10 @@
 {
+  "uda_version": "1.0.0",
   "meta": {
     "source_software": "petrel_eclipse",
     "source_file": "SPE1_ODEHIMPLI.DATA",
     "unit_system": "field",
-    "conversion_timestamp": "2026-03-16T09:13:04.489644",
+    "conversion_timestamp": "2026-03-18T09:32:23.184929",
     "start_date": "1982-10-19",
     "fluid_oil": true,
     "fluid_water": true,
@@ -324,6 +325,103 @@
       ],
       "confidence": 0.99,
       "source": "PROPS PVTO"
+    },
+    "pvt_table": {
+      "type": "table",
+      "columns": [
+        "p",
+        "rs",
+        "bo",
+        "eg",
+        "viso",
+        "visg"
+      ],
+      "rows": [
+        [
+          14.7,
+          1.0,
+          1.062,
+          6.000024000096,
+          1.04,
+          0.008
+        ],
+        [
+          264.7,
+          90.5,
+          1.15,
+          82.69246671628223,
+          0.975,
+          0.0096
+        ],
+        [
+          514.7,
+          180.0,
+          1.207,
+          159.38795027095952,
+          0.91,
+          0.0112
+        ],
+        [
+          1014.7,
+          371.0,
+          1.295,
+          312.7932436659368,
+          0.83,
+          0.014
+        ],
+        [
+          2014.7,
+          636.0,
+          1.435,
+          619.5786864931846,
+          0.695,
+          0.0189
+        ],
+        [
+          2514.7,
+          775.0,
+          1.5,
+          772.7975270479134,
+          0.641,
+          0.0208
+        ],
+        [
+          3014.7,
+          930.0,
+          1.565,
+          925.9259259259259,
+          0.594,
+          0.0228
+        ],
+        [
+          4014.7,
+          1270.0,
+          1.695,
+          1233.0456226880394,
+          0.51,
+          0.0268
+        ],
+        [
+          5014.7,
+          1618.0,
+          1.827,
+          1540.8320493066255,
+          0.449,
+          0.0309
+        ]
+      ],
+      "source": "business_rules.merge_pvt_saturated_only",
+      "confidence": 0.99
+    },
+    "oil_compressibility": {
+      "type": "scalar",
+      "value": 8.240384609732282e-06,
+      "unit": "1/psi"
+    },
+    "oil_viscosity_coeff": {
+      "type": "scalar",
+      "value": 0.0,
+      "unit": "1/psi"
     }
   },
   "rockfluid": {
@@ -512,6 +610,128 @@
       ],
       "confidence": 0.99,
       "source": "rockfluid sof3_table"
+    },
+    "swt_table": {
+      "type": "table",
+      "columns": [
+        "sw",
+        "krw",
+        "krow",
+        "pcow"
+      ],
+      "rows": [
+        [
+          0.12,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          1.0,
+          1e-05,
+          0.0,
+          0.0
+        ]
+      ],
+      "confidence": 0.9,
+      "source": "business_rules.merge_rockfluid_tables(swfn+sof3/sof2)"
+    },
+    "slt_table": {
+      "type": "table",
+      "columns": [
+        "sl",
+        "krg",
+        "krog",
+        "pcog"
+      ],
+      "rows": [
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.15000000000000002,
+          0.98,
+          0.0,
+          0.0
+        ],
+        [
+          0.30000000000000004,
+          0.94,
+          0.0002800000000000002,
+          0.0
+        ],
+        [
+          0.4,
+          0.87,
+          0.004600000000000005,
+          0.0
+        ],
+        [
+          0.5,
+          0.72,
+          0.03480000000000001,
+          0.0
+        ],
+        [
+          0.55,
+          0.6,
+          0.06930000000000004,
+          0.0
+        ],
+        [
+          0.6,
+          0.41,
+          0.134,
+          0.0
+        ],
+        [
+          0.7,
+          0.19,
+          0.4374999999999996,
+          0.0
+        ],
+        [
+          0.75,
+          0.125,
+          0.6562499999999999,
+          0.0
+        ],
+        [
+          0.8,
+          0.075,
+          0.8600000000000002,
+          0.0
+        ],
+        [
+          0.88,
+          0.025,
+          1.0,
+          0.0
+        ],
+        [
+          0.95,
+          0.005,
+          1.0,
+          0.0
+        ],
+        [
+          0.98,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          1.0,
+          0.0,
+          1.0,
+          0.0
+        ]
+      ],
+      "confidence": 0.9,
+      "source": "business_rules.merge_rockfluid_tables(sgfn+sof3)"
     }
   },
   "initial": {
@@ -557,6 +777,12 @@
       ],
       "confidence": 0.99,
       "source": "SOLUTION RSVD"
+    },
+    "bubble_point_pressure": {
+      "type": "scalar",
+      "value": 4014.7,
+      "unit": "psia",
+      "modifier": "CON"
     }
   },
   "numerical": {},
@@ -614,5 +840,6 @@
       "source": "SCHEDULE WELSPECS"
     }
   ],
-  "_total_sim_time": 1200.0
+  "timeline_events": [],
+  "unparsed_blocks": []
 }

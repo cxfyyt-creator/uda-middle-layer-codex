@@ -32,14 +32,14 @@ class WellType(str, Enum):
 class ScalarValue(BaseModel):
     type: Literal["scalar"]
     value: float
-    unit: str
+    unit: Optional[str] = ""
     confidence: float = 1.0
     source: str = ""
 
 class ArrayValue(BaseModel):
     type: Literal["array"]
     values: List[float]
-    unit: str
+    unit: Optional[str] = ""
     grid_order: str = "IJK"
     shape: Optional[List[int]] = None
     confidence: float = 1.0
@@ -49,7 +49,7 @@ class TableValue(BaseModel):
     type: Literal["table"]
     columns: List[str]
     rows: List[List[float]]
-    unit: str = "fraction"
+    unit: Optional[str] = "fraction"
     confidence: float = 1.0
     source: str = ""
 
@@ -135,13 +135,20 @@ class ReservoirBlock(BaseModel):
 
 class FluidBlock(BaseModel):
     pvt_table: Optional[TableValue] = None
+    pvts_table: Optional[TableValue] = None
     oil_density: Optional[ScalarValue] = None
     gas_density: Optional[ScalarValue] = None
     water_density: Optional[ScalarValue] = None
+    solvent_density: Optional[ScalarValue] = None
     water_fvf: Optional[ScalarValue] = None
     water_compressibility: Optional[ScalarValue] = None
     water_ref_pressure: Optional[ScalarValue] = None
     water_viscosity: Optional[ScalarValue] = None
+    tlmixpar: Optional[ScalarValue] = None
+    omegasg: Optional[ScalarValue] = None
+    minss: Optional[ScalarValue] = None
+    oil_compressibility: Optional[ScalarValue] = None
+    oil_viscosity_coeff: Optional[ScalarValue] = None
 
     @field_validator("water_fvf")
     @classmethod
@@ -191,6 +198,7 @@ class InitialBlock(BaseModel):
     ref_depth: Optional[ScalarValue] = None
     ref_pressure: Optional[ScalarValue] = None
     bubble_point_pressure: Optional[Union[ScalarValue, ArrayValue]] = None
+    solvent_bubble_point_pressure: Optional[Union[ScalarValue, ArrayValue]] = None
     woc_depth: Optional[ScalarValue] = None
     goc_depth: Optional[ScalarValue] = None
 
@@ -286,4 +294,3 @@ def validate_standard_model(data: dict, *, strict: bool = True) -> UniversalMode
         if strict:
             raise
         return None
-
