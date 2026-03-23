@@ -1,0 +1,21 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual / local tool folders
+.idea/
+.continue/
+
+# Backup files
+*.bak
+*.tmp
+
+# Runtime outputs and generated artifacts
+outputs/
+*.out
+*.sr3
+*.log
+
+# OS noise
+.DS_Store
+Thumbs.db
