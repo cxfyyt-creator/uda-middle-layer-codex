@@ -11,8 +11,11 @@ from pathlib import Path
 from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.confidence_checks import evaluate_confidence
 from utils.rule_loader import get_loader
 from utils.reporting import write_report_bundle
+from utils.target_preflight import evaluate_target_preflight
+from utils.value_semantics import modifier_from_distribution
 from business_rules import (
     apply_radial_perm_j,
     compute_depth_from_tops,
@@ -48,7 +51,7 @@ def _get_val(obj):
 
 def _get_modifier(obj):
     if isinstance(obj, dict):
-        return obj.get("modifier")
+        return obj.get("modifier") or modifier_from_distribution(obj)
     return None
 
 # ── CMG 数组写入 ──────────────────────────────────────────────────────────────
@@ -420,7 +423,8 @@ class CMGGenerator:
                 bhp_max = w.get("bhp_max")
                 rate_max = w.get("rate_max")
                 if rate_max:
-                    lines.append(f"*OPERATE *MAX *STG  {_fmt(rate_max).strip()}")
+                    inj_target = "STW" if inj == "WATER" else "STG"
+                    lines.append(f"*OPERATE *MAX *{inj_target}  {_fmt(rate_max).strip()}")
                 if bhp_max:
                     lines.append(f"*OPERATE *MAX *BHP  {_fmt(bhp_max).strip()}")
             else:
@@ -464,6 +468,10 @@ class CMGGenerator:
         # 收集所有 (time, well_idx, entry, well) 事件
         events = []
         if timeline_events:
+            well_map = {
+                (w.get("well_name") or f"W{i}"): w
+                for i, w in enumerate(wells, start=1)
+            }
             well_idx_map = {
                 (w.get("well_name") or f"W{i}"): i
                 for i, w in enumerate(wells, start=1)
@@ -477,7 +485,10 @@ class CMGGenerator:
                 val = ev.get("value")
                 if val is None:
                     continue
-                events.append((t, idx, {"value": val}, {"well_name": wname}))
+                event_payload = {"value": val}
+                if ev.get("target") is not None:
+                    event_payload["target"] = ev.get("target")
+                events.append((t, idx, event_payload, well_map.get(wname, {"well_name": wname})))
         else:
             for idx, w in enumerate(wells, start=1):
                 for ev in w.get("alter_schedule", []):
@@ -509,7 +520,7 @@ class CMGGenerator:
                 elif "target" in ev:
                     target = ev.get("target", "ORATE")
                     val    = ev.get("value", 0.0)
-                    lines.append(f"** WELTARG: {w.get('well_name')} {target}={val}")
+                    lines.append(f"** WELTARG mapped via ALTER: {w.get('well_name')} {target}={val}")
                     lines.append("*ALTER")
                     lines.append(f"  {idx}")
                     lines.append(f"  {_fmt(val).strip()}")
@@ -545,6 +556,50 @@ def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/gen
     else:
         data = data_or_json
 
+    def _write_failed_report(errors, warnings=None):
+        md_path, json_path = write_report_bundle(
+            report_dir=report_dir,
+            source_name=Path(source_name).name,
+            report_type="generate_cmg",
+            title="CMG generation report",
+            summary_items=[
+                ("output_file", "(not written)"),
+                ("line_count", 0),
+                ("well_count", len(data.get("wells", [])) if isinstance(data, dict) else 0),
+                ("grid_type", data.get("grid", {}).get("grid_type", "unknown") if isinstance(data, dict) else "unknown"),
+            ],
+            warnings=warnings or [],
+            errors=errors,
+            details={
+                "stage": "pre_generation_validation",
+                "preflight": preflight,
+                "confidence_check": confidence_check,
+            },
+        )
+        if isinstance(data, dict):
+            data.setdefault("_generate_report", {"md": str(md_path), "json": str(json_path)})
+
+    preflight = evaluate_target_preflight(data, target="cmg") if isinstance(data, dict) else {
+        "target": "cmg", "model": "UNKNOWN", "warnings": [], "blockers": [], "ok": True,
+    }
+    confidence_check = evaluate_confidence(data, target="cmg") if isinstance(data, dict) else {
+        "warnings": [], "blockers": [], "low_confidence_items": [], "checked_item_count": 0,
+        "warning_threshold": 0.9, "block_threshold": 0.5, "target": "cmg",
+    }
+
+    if preflight["blockers"]:
+        _write_failed_report(preflight["blockers"], warnings=preflight["warnings"])
+        raise ValueError(
+            "CMG generation blocked by preflight checks: "
+            + "; ".join(preflight["blockers"])
+        )
+    if confidence_check["blockers"]:
+        _write_failed_report(confidence_check["blockers"], warnings=preflight["warnings"] + confidence_check["warnings"])
+        raise ValueError(
+            "CMG generation blocked by very low-confidence critical fields: "
+            + "; ".join(confidence_check["blockers"])
+        )
+
     content = CMGGenerator().generate(data)
 
     out_path = None
@@ -557,19 +612,25 @@ def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/gen
     warnings = []
     wells = data.get("wells", []) if isinstance(data, dict) else []
     if not wells:
-        warnings.append("未发现井数据，WELL DATA 段可能为空")
+        warnings.append("no wells found; WELL DATA section may be empty")
+    warnings.extend(f"preflight: {w}" for w in preflight["warnings"][:10])
+    if len(preflight["warnings"]) > 10:
+        warnings.append(f"preflight: omitted {len(preflight['warnings']) - 10} more items")
+    warnings.extend(f"low confidence: {w}" for w in confidence_check["warnings"][:10])
+    if len(confidence_check["warnings"]) > 10:
+        warnings.append(f"low confidence: omitted {len(confidence_check['warnings']) - 10} more items")
 
     summary = [
-        ("输出文件", str(out_path) if out_path else "(未写盘)"),
-        ("行数", len(content.splitlines())),
-        ("井数量", len(wells)),
-        ("网格类型", data.get("grid", {}).get("grid_type", "CART") if isinstance(data, dict) else "unknown"),
+        ("output_file", str(out_path) if out_path else "(not written)"),
+        ("line_count", len(content.splitlines())),
+        ("well_count", len(wells)),
+        ("grid_type", data.get("grid", {}).get("grid_type", "CART") if isinstance(data, dict) else "unknown"),
     ]
     md_path, json_path = write_report_bundle(
         report_dir=report_dir,
         source_name=Path(source_name).name,
         report_type="generate_cmg",
-        title="CMG 生成报告",
+        title="CMG generation report",
         summary_items=summary,
         warnings=warnings,
         errors=[],
@@ -577,6 +638,8 @@ def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/gen
             "has_pvto_table": bool(data.get("fluid", {}).get("pvto_table")) if isinstance(data, dict) else False,
             "has_pvdg_table": bool(data.get("fluid", {}).get("pvdg_table")) if isinstance(data, dict) else False,
             "has_pvt_table": bool(data.get("fluid", {}).get("pvt_table")) if isinstance(data, dict) else False,
+            "preflight": preflight,
+            "confidence_check": confidence_check,
         },
     )
     if isinstance(data, dict):

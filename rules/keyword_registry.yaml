@@ -40,7 +40,10 @@ petrel:
     DEBUG:     {format: skip_slash}
     COLUMNS:   {format: skip_slash}
     SAVE:      {format: skip_slash}
+    LOAD:      {format: custom, handler: _parse_load}
+    RESTART:   {format: custom, handler: _parse_restart}
     RUNSUM:    {format: skip_slash}
+    OPTIONS:   {format: skip_slash}
     WGOR:      {format: skip_slash}
     WBHP:      {format: skip_slash}
     WOPR:      {format: skip_slash}
@@ -53,6 +56,9 @@ petrel:
     BOSAT:     {format: skip_slash}
     FOPR:      {format: skip_slash}
     BPR:       {format: skip_slash}
+    SATOPTS:   {format: skip_slash}
+    STOG:      {format: skip_slash}
+    STOW:      {format: skip_slash}
 
     DIMENS:  {format: dimens}
 

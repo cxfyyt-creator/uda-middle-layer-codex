@@ -16,8 +16,10 @@ from pathlib import Path
 
 # 把 utils 目录加入搜索路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.pvt_metadata import apply_pvt_role
 from utils.rule_loader import get_loader
 from utils.reporting import write_report_bundle
+from utils.value_semantics import apply_value_semantics
 
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
 
@@ -41,19 +43,31 @@ def _expand_repeat(tok):
         return [_to_float(m.group(2))] * int(m.group(1))
     return None
 
-def _scalar(v, unit, src, modifier=None):
+def _scalar(v, unit, src, modifier=None, distribution=None, axis=None, format_hint=None):
     d = {"type": "scalar", "value": v, "unit": unit,
          "confidence": 0.99, "source": src}
-    if modifier:
-        d["modifier"] = modifier
-    return d
+    return apply_value_semantics(
+        d,
+        value_type="scalar",
+        modifier=modifier,
+        software="petrel_eclipse",
+        distribution=distribution,
+        axis=axis,
+        format_hint=format_hint,
+    )
 
-def _array(vs, unit, src, modifier=None):
+def _array(vs, unit, src, modifier=None, distribution=None, axis=None, format_hint=None):
     d = {"type": "array", "values": vs, "unit": unit,
          "grid_order": "IJK", "confidence": 0.99, "source": src}
-    if modifier:
-        d["modifier"] = modifier
-    return d
+    return apply_value_semantics(
+        d,
+        value_type="array",
+        modifier=modifier,
+        software="petrel_eclipse",
+        distribution=distribution,
+        axis=axis,
+        format_hint=format_hint,
+    )
 
 def _table(cols, rows, src):
     return {"type": "table", "columns": cols, "rows": rows,
@@ -109,14 +123,21 @@ def _tokenize(filepath):
 
 class PetrelParser:
 
-    def __init__(self, filepath):
+    def __init__(self, filepath, _load_stack=None):
         self.filepath = Path(filepath)
         self.tokens = []
         self.pos = 0
         self._current_time = 0.0
+        self._time_checkpoints = [0.0]
         self._rl = get_loader()
         self.logger = logging.getLogger(__name__)
         self.unparsed_blocks = []
+        self._load_stack = set(_load_stack or [])
+        try:
+            self._load_stack.add(str(self.filepath.resolve()).lower())
+        except Exception:
+            self._load_stack.add(str(self.filepath).lower())
+        self._loaded_base_raw = None
 
     def _record_unparsed(self, lineno, text, reason=""):
         msg = f"未解析内容 line={lineno}: {text}"
@@ -334,29 +355,89 @@ class PetrelParser:
 
     # ── 通用 handler：table ────────────────────────────────────────────────────
 
+    def _read_table_sets(self, kw_lineno, ncols):
+        self._skip_rest_of_kw_line(kw_lineno)
+        tables = []
+        current_table = []
+        current_row = []
+        current_lineno = None
+
+        def flush_row():
+            nonlocal current_row, current_table
+            if not current_row:
+                return
+            chunks = []
+            for i in range(0, len(current_row), ncols):
+                chunk = current_row[i:i + ncols]
+                if any(v is not None for v in chunk):
+                    if len(chunk) < ncols:
+                        chunk = chunk + [None] * (ncols - len(chunk))
+                    chunks.append(chunk)
+            current_table.extend(chunks)
+            current_row = []
+
+        def flush_table():
+            nonlocal current_table
+            if current_table:
+                tables.append(current_table)
+                current_table = []
+
+        while self._peek():
+            ln, tok = self._peek()
+            if tok == '/':
+                self.pos += 1
+                flush_row()
+                flush_table()
+                current_lineno = None
+                continue
+            if self._is_kw_tok(tok):
+                break
+            self.pos += 1
+            if self._is_noise(tok):
+                continue
+            if current_lineno is None:
+                current_lineno = ln
+            elif ln != current_lineno:
+                flush_row()
+                current_lineno = ln
+
+            m_null = re.match(r'^(\d+)\*$', str(tok))
+            if m_null:
+                current_row.extend([None] * int(m_null.group(1)))
+                continue
+
+            exp = _expand_repeat(tok)
+            if exp is not None:
+                current_row.extend(exp)
+                continue
+
+            try:
+                current_row.append(_to_float(tok))
+            except ValueError:
+                pass
+
+        flush_row()
+        flush_table()
+        return tables
+
     def _handle_table(self, entry, kw_lineno, R):
-        """
-        读取相渗表/简单 PVT 表。
-        格式：每行若干数值 + /（行终止），整表以空 / 或下一关键字终止。
-        """
         json_spec = entry["json"]
         columns = entry.get("columns", [])
         ncols = entry.get("ncols", len(columns))
         src = f"{json_spec['section']} {json_spec['key']}"
 
-        # 跳过关键字同行的噪声
-        self._skip_rest_of_kw_line(kw_lineno)
+        table_sets = self._read_table_sets(kw_lineno, ncols)
+        if not table_sets:
+            return
 
-        nums = self._read_floats_until_keyword()
-        rows = []
-        i = 0
-        while i + ncols - 1 < len(nums):
-            rows.append(nums[i:i + ncols])
-            i += ncols
-        if rows:
-            R[json_spec["section"]][json_spec["key"]] = _table(columns, rows, src)
+        objs = []
+        for idx, rows in enumerate(table_sets, start=1):
+            obj = _table(columns, rows, src if idx == 1 else f"{src} set#{idx}")
+            objs.append(obj)
 
-    # ── 通用 handler：dimens ───────────────────────────────────────────────────
+        R[json_spec["section"]][json_spec["key"]] = objs[0]
+        if len(objs) > 1:
+            R[json_spec["section"]][f"{json_spec['key']}_sets"] = objs
 
     def _handle_dimens(self, R):
         vals = self._read_floats_until_slash()
@@ -375,6 +456,69 @@ class PetrelParser:
         if section not in R:
             R[section] = {}
         R[section][key] = value
+
+    def _normalize_phase_or_fluid(self, value):
+        if value is None:
+            return None
+        txt = str(value).strip("'").strip().upper()
+        if txt in ("", "1*", "NONE"):
+            return None
+        alias_map = {
+            "WAT": "WATER",
+            "WTR": "WATER",
+            "SOLV": "SOLVENT",
+        }
+        return alias_map.get(txt, txt)
+
+    def _resolve_related_datafile(self, stem_text):
+        raw = str(stem_text).strip("'").strip()
+        if not raw:
+            return None
+        candidate = Path(raw)
+        search_dir = self.filepath.parent
+
+        candidates = []
+        if candidate.suffix:
+            candidates.extend([search_dir / candidate, candidate if candidate.is_absolute() else None])
+        else:
+            candidates.extend([
+                search_dir / f"{raw}.DATA",
+                search_dir / f"{raw}.data",
+                search_dir / f"{raw}.DAT",
+                search_dir / raw,
+            ])
+
+        for item in candidates:
+            if item and item.exists():
+                return item
+
+        raw_upper = raw.upper()
+        for item in search_dir.glob('*'):
+            if item.is_file() and item.stem.upper() == raw_upper and item.suffix.upper() in (".DATA", ".DAT"):
+                return item
+        return None
+
+    def _merge_loaded_base(self, R, base_raw):
+        if not base_raw:
+            return
+
+        for section in ("grid", "reservoir", "fluid", "rockfluid", "initial", "numerical"):
+            merged = copy.deepcopy(base_raw.get(section, {}))
+            merged.update(copy.deepcopy(R.get(section, {})))
+            R[section] = merged
+
+        protected_meta = {"source_software", "source_file", "conversion_timestamp"}
+        base_meta = copy.deepcopy(base_raw.get("meta", {}))
+        for key, value in base_meta.items():
+            if key in protected_meta:
+                continue
+            if key not in R["meta"] or R["meta"].get(key) in (None, [], {}, ""):
+                R["meta"][key] = value
+
+        merged_wells = {str(w.get("well_name", "")).strip(): copy.deepcopy(w) for w in base_raw.get("wells", [])}
+        for well in R.get("wells", []):
+            merged_wells[str(well.get("well_name", "")).strip()] = copy.deepcopy(well)
+        R["wells"] = [merged_wells[name] for name in sorted(merged_wells.keys()) if name]
 
     # ── 自定义处理器 ──────────────────────────────────────────────────────────
 
@@ -431,7 +575,7 @@ class PetrelParser:
             if not row:
                 break
 
-            kw_raw = row[0].strip("'").upper()
+            kw_raw = row[0].strip("'").strip().upper()
             if kw_raw not in reverse:
                 continue
             section, key, unit = reverse[kw_raw]
@@ -482,16 +626,41 @@ class PetrelParser:
                         vals_list[k] = value
                     vals_list = [v if v is not None else 0.0 for v in vals_list]
                     if len(set(vals_list)) == 1:
-                        R[section][key] = _scalar(vals_list[0], unit, src, modifier="CON")
+                        R[section][key] = _scalar(
+                            vals_list[0],
+                            unit,
+                            src,
+                            distribution="constant",
+                            format_hint={"keyword": "EQUALS", "box_scope": "full_layer"},
+                        )
                     else:
-                        R[section][key] = _array(vals_list, unit, src, modifier="KVAR")
+                        R[section][key] = _array(
+                            vals_list,
+                            unit,
+                            src,
+                            distribution="by_layer",
+                            axis="k",
+                            format_hint={"keyword": "EQUALS", "box_scope": "full_layer"},
+                        )
                 else:
                     # 局部 BOX（非整层）→ 简单标量，不做精细网格展开
                     if R[section].get(key) is None:
-                        R[section][key] = _scalar(value, unit, src + " BOX", modifier="CON")
+                        R[section][key] = _scalar(
+                            value,
+                            unit,
+                            src + " BOX",
+                            distribution="constant",
+                            format_hint={"keyword": "EQUALS", "box_scope": "partial_box"},
+                        )
             else:
                 # 没有任何 BOX 信息（包括 last_box 也是 None）→ 全场常数
-                R[section][key] = _scalar(value, unit, src, modifier="CON")
+                R[section][key] = _scalar(
+                    value,
+                    unit,
+                    src,
+                    distribution="constant",
+                    format_hint={"keyword": "EQUALS", "box_scope": "global"},
+                )
 
     def _parse_copy(self, R):
         """COPY 'SRC' 'DST' /"""
@@ -553,6 +722,7 @@ class PetrelParser:
                 obj["values"] = [v * factor for v in obj["values"]]
 
     def _parse_pvtw(self, R):
+        self._skip_rest_of_kw_line(self._last_lineno())
         vals = self._read_floats_until_slash()
         if len(vals) >= 4:
             src = "PROPS PVTW"
@@ -564,6 +734,7 @@ class PetrelParser:
                 R["fluid"]["water_viscosity_coeff"] = _scalar(vals[4], "1/psi", src)
 
     def _parse_rock(self, R):
+        self._skip_rest_of_kw_line(self._last_lineno())
         vals = self._read_floats_until_slash()
         if len(vals) >= 2:
             R["reservoir"]["rock_ref_pressure"] = _scalar(vals[0], "psia", "PROPS ROCK")
@@ -576,6 +747,7 @@ class PetrelParser:
 
 
     def _parse_density(self, R):
+        self._skip_rest_of_kw_line(self._last_lineno())
         vals = self._read_floats_until_slash()
         if len(vals) >= 3:
             src = "PROPS DENSITY"
@@ -584,6 +756,7 @@ class PetrelParser:
             R["fluid"]["gas_density"] = _scalar(vals[2], "lb/ft3", src)
 
     def _parse_pvto(self, R):
+        self._skip_rest_of_kw_line(self._last_lineno())
         """
         PVTO 活油表。格式：
           RS  PSAT  BO  VISO  /      ← 简单组（饱和点）
@@ -616,9 +789,15 @@ class PetrelParser:
             elif len(nums) == 3 and current_rs is not None:
                 rows.append([current_rs, nums[0], nums[1], nums[2]])
         if rows:
-            R["fluid"]["pvto_table"] = _table(["rs", "p", "bo", "viso"], rows, "PROPS PVTO")
+            R["fluid"]["pvto_table"] = apply_pvt_role(
+                _table(["rs", "p", "bo", "viso"], rows, "PROPS PVTO"),
+                pvt_form="eclipse_pvto",
+                representation_role="native_source",
+                preferred_backend="petrel",
+            )
 
     def _parse_pvdg(self, R):
+        self._skip_rest_of_kw_line(self._last_lineno())
         """PVDG 干气表，3列：p bg visg，整表共享一个末尾 /"""
         nums = self._read_floats_until_slash()
         rows = []
@@ -627,7 +806,12 @@ class PetrelParser:
             rows.append([nums[i], nums[i + 1], nums[i + 2]])
             i += 3
         if rows:
-            R["fluid"]["pvdg_table"] = _table(["p", "bg", "visg"], rows, "PROPS PVDG")
+            R["fluid"]["pvdg_table"] = apply_pvt_role(
+                _table(["p", "bg", "visg"], rows, "PROPS PVDG"),
+                pvt_form="eclipse_pvdg",
+                representation_role="native_source",
+                preferred_backend="petrel",
+            )
 
     def _parse_equil(self, R):
         vals = self._read_floats_until_slash()
@@ -651,6 +835,17 @@ class PetrelParser:
         if rows:
             R["initial"]["rsvd_table"] = _table(["depth", "rs"], rows, "SOLUTION RSVD")
 
+    def _parse_pbvd(self, R):
+        rows = []
+        while self._peek():
+            nums = self._read_floats_until_slash()
+            if not nums:
+                break
+            if len(nums) >= 2:
+                rows.append([nums[0], nums[1]])
+        if rows:
+            R["initial"]["pbvd_table"] = _table(["pb", "depth"], rows, "SOLUTION PBVD")
+
     def _parse_start(self, R):
         row = self._read_until_slash()
         strs = [str(t).strip("'") for t in row]
@@ -663,12 +858,79 @@ class PetrelParser:
             except (ValueError, IndexError):
                 pass
 
+    def _parse_load(self, R):
+        row = self._read_until_slash()
+        strs = [str(t).strip("'").strip() for t in row]
+        if not strs:
+            return
+        base_path = self._resolve_related_datafile(strs[0])
+        if not base_path:
+            self._record_unparsed(self._last_lineno(), f"LOAD {strs[0]}", reason="load target not found")
+            return
+        try:
+            resolved_key = str(base_path.resolve()).lower()
+        except Exception:
+            resolved_key = str(base_path).lower()
+        if resolved_key in self._load_stack:
+            self._record_unparsed(self._last_lineno(), f"LOAD {base_path.name}", reason="recursive load detected")
+            return
+
+        base_raw = PetrelParser(base_path, _load_stack=self._load_stack | {resolved_key}).parse()
+        self._loaded_base_raw = base_raw
+        self._merge_loaded_base(R, base_raw)
+        R["meta"]["load_source_file"] = base_path.name
+
+    def _parse_restart(self, R):
+        row = self._read_until_slash()
+        strs = [str(t).strip("'").strip() for t in row]
+        if not strs:
+            return
+
+        restart_name = strs[0]
+        restart_step = None
+        if len(strs) >= 2:
+            try:
+                restart_step = int(float(strs[1]))
+            except (ValueError, TypeError):
+                restart_step = None
+
+        if self._loaded_base_raw is None:
+            base_path = self._resolve_related_datafile(restart_name)
+            if base_path:
+                try:
+                    resolved_key = str(base_path.resolve()).lower()
+                except Exception:
+                    resolved_key = str(base_path).lower()
+                if resolved_key not in self._load_stack:
+                    self._loaded_base_raw = PetrelParser(base_path, _load_stack=self._load_stack | {resolved_key}).parse()
+                    self._merge_loaded_base(R, self._loaded_base_raw)
+
+        if self._loaded_base_raw:
+            checkpoints = self._loaded_base_raw.get("_time_checkpoints") or [0.0]
+            if restart_step is not None and checkpoints:
+                idx = max(0, min(restart_step, len(checkpoints) - 1))
+                self._current_time = float(checkpoints[idx])
+                self._time_checkpoints = [self._current_time]
+
+        R["meta"]["restart_source_file"] = restart_name
+        if restart_step is not None:
+            R["meta"]["restart_step"] = restart_step
+
     def _find_well(self, name, R):
-        name_clean = name.strip("'")
+        name_clean = str(name).strip("'").strip()
         for w in R["wells"]:
-            if w["well_name"] == name_clean:
+            wname = str(w["well_name"]).strip()
+            if wname == name_clean:
                 return w
         return None
+
+    def _find_wells(self, name_pattern, R):
+        pattern = str(name_pattern).strip("'").strip()
+        if "*" in pattern:
+            prefix = pattern.split("*", 1)[0]
+            return [w for w in R["wells"] if str(w.get("well_name", "")).strip().startswith(prefix)]
+        w = self._find_well(pattern, R)
+        return [w] if w else []
 
     def _parse_welspecs(self, R):
         # 跳过关键字同行的时间戳等噪声（找第一个引号 token）
@@ -688,33 +950,44 @@ class PetrelParser:
             strs = [str(t).strip("'") for t in row]
             if len(strs) < 4:
                 continue
-            name = strs[0]
+            name = strs[0].strip()
             group = strs[1]
             try:
                 ci = int(strs[2])
                 cj = int(strs[3])
             except ValueError:
                 continue
-            phase = strs[5].upper() if len(strs) > 5 else "OIL"
-            if phase in ("None", "1*", ""):
-                phase = "OIL"
-            wtype = "INJECTOR" if phase in ("GAS", "WATER") else "PRODUCER"
-            R["wells"].append({
-                "well_name": name,
-                "well_type": wtype,
-                "well_group": group,
-                "well_i": ci, "well_j": cj,
-                "phase": phase,
-                "bhp_max": None, "bhp_min": None,
-                "rate_max": None, "rate_min": None,
-                "perforations": [],
-                "well_radius": None,
-                "inj_fluid": None,
-                "alter_schedule": [],
-                "source": "SCHEDULE WELSPECS"
-            })
+            phase = self._normalize_phase_or_fluid(strs[5] if len(strs) > 5 else "OIL") or "OIL"
+            wtype = "PRODUCER" if phase == "OIL" else None
+            existing = self._find_well(name, R)
+            if existing is None:
+                R["wells"].append({
+                    "well_name": name,
+                    "well_type": wtype,
+                    "well_group": group,
+                    "well_i": ci, "well_j": cj,
+                    "phase": phase,
+                    "bhp_max": None, "bhp_min": None,
+                    "rate_max": None, "rate_min": None,
+                    "perforations": [],
+                    "well_radius": None,
+                    "inj_fluid": None,
+                    "alter_schedule": [],
+                    "source": "SCHEDULE WELSPECS"
+                })
+            else:
+                existing.update({
+                    "well_group": group,
+                    "well_i": ci,
+                    "well_j": cj,
+                    "phase": phase,
+                    "source": "SCHEDULE WELSPECS",
+                })
+                if wtype and not existing.get("well_type"):
+                    existing["well_type"] = wtype
 
     def _parse_compdat(self, R):
+        self._skip_rest_of_kw_line(self._last_lineno())
         while self._peek():
             row = self._read_until_slash()
             if not row:
@@ -722,27 +995,36 @@ class PetrelParser:
             strs = [str(t).strip("'") for t in row]
             if len(strs) < 5:
                 continue
-            name = strs[0]
-            try:
-                pi = int(strs[1])
-                pj = int(strs[2])
-                k1 = int(strs[3])
-                k2 = int(strs[4])
-            except ValueError:
+            name = strs[0].strip()
+            w = self._find_well(name, R)
+            if w is None:
                 continue
-            status = strs[5].upper() if len(strs) > 5 else "OPEN"
+            fields = []
+            for token in strs[1:]:
+                m = re.match(r'^(\d+)\*$', token)
+                if m:
+                    fields.extend([None] * int(m.group(1)))
+                else:
+                    fields.append(token)
+            if len(fields) < 5:
+                continue
+            try:
+                pi = w.get("well_i") if fields[0] is None else int(fields[0])
+                pj = w.get("well_j") if fields[1] is None else int(fields[1])
+                k1 = int(fields[2])
+                k2 = int(fields[3])
+            except (ValueError, TypeError):
+                continue
+            status = str(fields[4] or "OPEN").upper()
             diam = None
-            for s in strs[6:]:
-                if re.match(r'^\d+\*$', s):
+            for s in fields[5:]:
+                if s is None or re.match(r'^\d+\*$', str(s)):
                     continue
                 try:
                     diam = _to_float(s)
                     break
                 except ValueError:
                     continue
-            w = self._find_well(name, R)
-            if w is None:
-                continue
             if diam is not None and diam > 0:
                 w["well_radius"] = diam / 2.0
             for k in range(k1, k2 + 1):
@@ -753,6 +1035,7 @@ class PetrelParser:
                 })
 
     def _parse_wconprod(self, R):
+        self._skip_rest_of_kw_line(self._last_lineno())
         while self._peek():
             row = self._read_until_slash()
             if not row:
@@ -760,11 +1043,10 @@ class PetrelParser:
             strs = [str(t).strip("'") for t in row]
             if len(strs) < 3:
                 continue
-            name = strs[0]
-            w = self._find_well(name, R)
-            if w is None:
+            name = strs[0].strip()
+            wells = self._find_wells(name, R)
+            if not wells:
                 continue
-            w["well_type"] = "PRODUCER"
 
             def _gv(idx):
                 if idx >= len(strs):
@@ -779,12 +1061,15 @@ class PetrelParser:
 
             oil = _gv(3)
             bhp = _gv(8)
-            if oil is not None and oil > 0:
-                w["rate_max"] = oil
-            if bhp is not None:
-                w["bhp_min"] = bhp
+            for w in wells:
+                w["well_type"] = "PRODUCER"
+                if oil is not None and oil > 0:
+                    w["rate_max"] = oil
+                if bhp is not None:
+                    w["bhp_min"] = bhp
 
     def _parse_wconinje(self, R):
+        self._skip_rest_of_kw_line(self._last_lineno())
         while self._peek():
             row = self._read_until_slash()
             if not row:
@@ -792,13 +1077,11 @@ class PetrelParser:
             strs = [str(t).strip("'") for t in row]
             if len(strs) < 4:
                 continue
-            name = strs[0]
-            inj_type = strs[1].upper() if len(strs) > 1 else "GAS"
-            w = self._find_well(name, R)
-            if w is None:
+            name = strs[0].strip()
+            inj_type = self._normalize_phase_or_fluid(strs[1] if len(strs) > 1 else "GAS") or "GAS"
+            wells = self._find_wells(name, R)
+            if not wells:
                 continue
-            w["well_type"] = "INJECTOR"
-            w["inj_fluid"] = inj_type
 
             def _gv(idx):
                 if idx >= len(strs):
@@ -813,13 +1096,17 @@ class PetrelParser:
 
             rate = _gv(4)
             bhp = _gv(6)
-            if rate is not None and rate > 0:
-                w["rate_max"] = rate
-            if bhp is not None:
-                w["bhp_max"] = bhp
+            for w in wells:
+                w["well_type"] = "INJECTOR"
+                w["inj_fluid"] = inj_type
+                if rate is not None and rate > 0:
+                    w["rate_max"] = rate
+                if bhp is not None:
+                    w["bhp_max"] = bhp
 
     def _parse_weltarg(self, R):
         """WELTARG 'WELLNAME' 'TARGET' value /"""
+        self._skip_rest_of_kw_line(self._last_lineno())
         while self._peek():
             row = self._read_until_slash()
             if not row:
@@ -827,14 +1114,13 @@ class PetrelParser:
             strs = [str(t).strip("'") for t in row]
             if len(strs) < 3:
                 continue
-            name = strs[0]
+            name = strs[0].strip()
             target = strs[1].upper()
             try:
                 value = _to_float(strs[2])
             except (ValueError, IndexError):
                 continue
-            w = self._find_well(name, R)
-            if w:
+            for w in self._find_wells(name, R):
                 w["alter_schedule"].append({
                     "target": target,
                     "value": value,
@@ -845,6 +1131,7 @@ class PetrelParser:
         vals = self._read_floats_until_slash()
         for dt in vals:
             self._current_time += dt
+            self._time_checkpoints.append(self._current_time)
 
     def _parse_dates(self, R):
         row = self._read_until_slash()
@@ -890,6 +1177,7 @@ class PetrelParser:
     def parse(self):
         self.tokens = _tokenize(self.filepath)
         self._current_time = 0.0
+        self._time_checkpoints = [0.0]
 
         kw_map = self._rl.petrel_kw_map()
         sections = set(self._rl.petrel_sections())
@@ -934,6 +1222,20 @@ class PetrelParser:
             if u == "END":
                 break
 
+            # 已知可安全跳过的调度辅助关键字
+            if u == "NEXTSTEP":
+                self._skip_to_slash()
+                continue
+
+            # 已知可安全忽略的 SUMMARY 输出请求
+            if u in {"WMCTL", "BOKR", "BWSAT"}:
+                self._skip_to_slash()
+                continue
+
+            if u == "PBVD":
+                self._parse_pbvd(R)
+                continue
+
                         # YAML 注册的关键字
             if u in kw_map:
                 entry = kw_map[u]
@@ -963,6 +1265,7 @@ class PetrelParser:
         if self.unparsed_blocks:
             R["unparsed_blocks"] = self.unparsed_blocks
         R["_total_sim_time"] = self._current_time
+        R["_time_checkpoints"] = list(self._time_checkpoints)
         return R
 
 

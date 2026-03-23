@@ -66,7 +66,10 @@ def transform_raw_to_standard(raw: Dict[str, Any]) -> Dict[str, Any]:
     fluid, initial = enrich_miscible_model(fluid, rockfluid, initial, raw.get("meta", {}))
 
     model = StandardModel(
-        meta=dict(raw.get("meta", {})),
+        meta={
+            **dict(raw.get("meta", {})),
+            **({"_total_sim_time": raw.get("_total_sim_time")} if raw.get("_total_sim_time") is not None else {}),
+        },
         grid=grid,
         reservoir=reservoir,
         fluid=fluid,

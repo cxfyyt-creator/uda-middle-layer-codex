@@ -16,6 +16,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.rule_loader import get_loader
 from utils.reporting import write_report_bundle
+from utils.pvt_metadata import apply_pvt_role
+from utils.value_semantics import apply_value_semantics
+
+_TOKEN_RE = re.compile(r"'[^']*'|\"[^\"]*\"|\S+")
+_TITLE_KWS = {"*TITLE1", "*TITLE2", "*TITLE3"}
+_LINE_IGNORE_KWS = {
+    "*RESULTS", "*WPRN", "*OUTPRN", "*WSRF", "*OUTSRF",
+    "*MONITOR", "*GROUP", "*AIMWELL", "*AIMGROUP", "*OUTDIARY",
+}
 
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
 
@@ -40,14 +49,24 @@ def _scalar(v, unit, src, modifier=None):
          "confidence": 0.99, "source": src}
     if modifier:
         d["modifier"] = modifier
-    return d
+    return apply_value_semantics(
+        d,
+        value_type="scalar",
+        modifier=modifier,
+        software="cmg_imex",
+    )
 
 def _array(vs, unit, src, modifier=None):
     d = {"type": "array", "values": vs, "unit": unit,
          "grid_order": "IJK", "confidence": 0.99, "source": src}
     if modifier:
         d["modifier"] = modifier
-    return d
+    return apply_value_semantics(
+        d,
+        value_type="array",
+        modifier=modifier,
+        software="cmg_imex",
+    )
 
 def _table(cols, rows, src):
     return {"type": "table", "columns": cols, "rows": rows,
@@ -65,17 +84,40 @@ class CMGParser:
         self._rl = get_loader()
         self.logger = logging.getLogger(__name__)
         self.unparsed_blocks = []
+        self.active_well_indices = []
+        self.last_geometry = None
 
     # ── Token 管理 ────────────────────────────────────────────────────────────
 
     def _load_tokens(self):
         with open(self.filepath, encoding="utf-8", errors="ignore") as f:
             lines = f.readlines()
+
+        skip_next_text_line = False
         for lineno, raw in enumerate(lines, 1):
             line = _strip_comments(raw)
             if not line:
                 continue
-            for tok in line.split():
+
+            toks = _TOKEN_RE.findall(line)
+            if not toks:
+                continue
+
+            first = toks[0].upper()
+            normalized_first = first if first.startswith("*") else f"*{first}" if first.isalpha() else first
+
+            if skip_next_text_line and not first.startswith("*"):
+                skip_next_text_line = False
+                continue
+
+            if normalized_first in _TITLE_KWS:
+                skip_next_text_line = len(toks) == 1
+                continue
+
+            if normalized_first in _LINE_IGNORE_KWS or first == "RESULTS":
+                continue
+
+            for tok in toks:
                 self.tokens.append((lineno, tok))
 
     def _peek(self, off=0):
@@ -103,7 +145,90 @@ class CMGParser:
             "reason": reason,
         })
 
-    # ── 基础读取 ──────────────────────────────────────────────────────────────
+    def _skip_same_line_tokens(self, lineno):
+        while self._peek() and self._peek()[0] == lineno:
+            self.pos += 1
+
+    def _read_same_line_tokens(self, lineno):
+        toks = []
+        while self._peek() and self._peek()[0] == lineno:
+            toks.append(self._next()[1])
+        return toks
+
+    def _expand_int_token(self, tok):
+        text = str(tok).strip()
+        if not text:
+            return None
+        m = re.match(r'^(-?\d+):(-?\d+)$', text)
+        if m:
+            start = int(m.group(1))
+            end = int(m.group(2))
+            step = 1 if end >= start else -1
+            return list(range(start, end + step, step))
+        if re.match(r'^-?\d+$', text):
+            return [int(text)]
+        return None
+
+    def _collect_numeric_tokens_until_kw(self):
+        toks = []
+        while self._peek() and not _is_kw(self._peek()[1]):
+            toks.append(self._next()[1])
+        return toks
+
+    def _expand_numeric_tokens(self, toks):
+        vals = []
+        for tok in toks:
+            expanded = _expand_repeat(tok)
+            if expanded is not None:
+                vals.extend(expanded)
+                continue
+            try:
+                vals.append(_to_float(tok))
+            except ValueError:
+                pass
+        return vals
+
+    def _find_well(self, R, well_index):
+        for well in R['wells']:
+            if well.get('well_index') == well_index:
+                return well
+        return None
+
+    def _ensure_well(self, R, well_index, well_name=None):
+        well = self._find_well(R, well_index)
+        if well is None:
+            well = {
+                'well_name': well_name or f'W{well_index}',
+                'well_index': well_index,
+                'well_type': None,
+                'perforations': [],
+                'well_radius': None,
+                'bhp_max': None, 'bhp_min': None,
+                'rate_max': None,
+                'inj_fluid': None,
+                'alter_schedule': [],
+                'geofac': None, 'wfrac': None, 'skin': None,
+            }
+            R['wells'].append(well)
+        elif well_name and (not well.get('well_name') or str(well.get('well_name', '')).startswith('W')):
+            well['well_name'] = well_name
+        return well
+
+    def _resolve_well_indices(self, R, selector=None):
+        if selector:
+            resolved = []
+            for idx in selector:
+                if idx not in resolved:
+                    resolved.append(idx)
+            return resolved
+        if self.active_well_indices:
+            return list(self.active_well_indices)
+        if R['wells']:
+            return [R['wells'][-1]['well_index']]
+        return []
+
+    def _wells_for_selector(self, R, selector=None):
+        return [self._ensure_well(R, idx) for idx in self._resolve_well_indices(R, selector)]
 
     def _read_floats(self):
         """读取连续浮点数（支持N*val），遇到*关键字停止"""
@@ -225,7 +350,12 @@ class CMGParser:
             elif row:
                 break
         if rows:
-            R["fluid"]["pvt_table"] = _table(cols, rows, "fluid *PVT")
+            R["fluid"]["pvt_table"] = apply_pvt_role(
+                _table(cols, rows, "fluid *PVT"),
+                pvt_form="cmg_pvt_table",
+                representation_role="native_source",
+                preferred_backend="cmg",
+            )
 
     def _handle_table(self, entry, R):
         """通用n列浮点表，直到下一个*关键字。"""
@@ -387,203 +517,258 @@ class CMGParser:
     def _parse_well(self, R, in_run_section):
         if not in_run_section:
             return
-        nums = []
+
+        lineno = self._last_lineno()
+        tokens = self._read_same_line_tokens(lineno)
+        selector = []
         name = None
-        for _ in range(2):
-            t = self._peek()
-            if not t or _is_kw(t[1]):
-                break
-            _, tok = self._next()
-            if tok.startswith("'"):
+        vert = None
+        i = 0
+        while i < len(tokens):
+            tok = tokens[i]
+            expanded = self._expand_int_token(tok)
+            if expanded and not selector:
+                selector = expanded
+                i += 1
+                continue
+            if tok.startswith("'") and tok.endswith("'") and name is None:
                 name = tok.strip("'")
-            else:
+                i += 1
+                continue
+            if tok.upper() == '*VERT' and i + 2 < len(tokens):
                 try:
-                    nums.append(int(tok))
+                    vert = (int(float(tokens[i + 1])), int(float(tokens[i + 2])))
+                    i += 3
+                    continue
                 except ValueError:
                     pass
-        well_index = nums[0] if nums else len(R["wells"]) + 1
-        R["wells"].append({
-            "well_name": name or f"W{well_index}",
-            "well_index": well_index,
-            "well_type": None,
-            "perforations": [],
-            "well_radius": None,
-            "bhp_max": None, "bhp_min": None,
-            "rate_max": None,
-            "inj_fluid": None,
-            "alter_schedule": [],
-            "geofac": None, "wfrac": None, "skin": None,
-        })
+            i += 1
+
+        well_index = selector[0] if selector else len(R['wells']) + 1
+        well = self._ensure_well(R, well_index, name)
+        if name:
+            well['well_name'] = name
+        if vert:
+            well['well_i'], well['well_j'] = vert
+        self.active_well_indices = [well_index]
 
     def _parse_producer(self, R, in_run_section):
-        if not in_run_section or not R["wells"]:
+        if not in_run_section or not R['wells']:
             return
-        R["wells"][-1]["well_type"] = "PRODUCER"
-        t = self._peek()
-        if t and not _is_kw(t[1]):
-            try:
-                int(t[1])
-                self.pos += 1
-            except ValueError:
-                pass
+
+        lineno = self._last_lineno()
+        tokens = self._read_same_line_tokens(lineno)
+        selector = []
+        for tok in tokens:
+            expanded = self._expand_int_token(tok)
+            if expanded:
+                selector = expanded
+                break
+        wells = self._wells_for_selector(R, selector)
+        for well in wells:
+            well['well_type'] = 'PRODUCER'
+        self.active_well_indices = [w['well_index'] for w in wells]
 
     def _parse_injector(self, R, in_run_section):
-        if not in_run_section or not R["wells"]:
+        if not in_run_section or not R['wells']:
             return
-        R["wells"][-1]["well_type"] = "INJECTOR"
-        _MODS = {"*UNWEIGHT", "*WEIGHT"}
-        while self._peek():
-            _, t2 = self._peek()
-            if _is_kw(t2) and t2.upper() not in _MODS:
+
+        lineno = self._last_lineno()
+        tokens = self._read_same_line_tokens(lineno)
+        selector = []
+        for tok in tokens:
+            expanded = self._expand_int_token(tok)
+            if expanded:
+                selector = expanded
                 break
-            self.pos += 1
+        wells = self._wells_for_selector(R, selector)
+        for well in wells:
+            well['well_type'] = 'INJECTOR'
+        self.active_well_indices = [w['well_index'] for w in wells]
 
     def _parse_incomp(self, R, in_run_section):
-        if not in_run_section or not R["wells"]:
+        if not in_run_section or not R['wells']:
             return
-        t = self._peek()
-        if t and _is_kw(t[1]):
-            _, fluid_kw = self._next()
-            R["wells"][-1]["inj_fluid"] = fluid_kw.lstrip("*").upper()
+
+        lineno = self._last_lineno()
+        tokens = self._read_same_line_tokens(lineno)
+        fluid_kw = next((tok for tok in tokens if _is_kw(tok)), None)
+        if fluid_kw:
+            for well in self._wells_for_selector(R):
+                well['inj_fluid'] = fluid_kw.lstrip('*').upper()
 
     def _parse_operate(self, R, in_run_section):
-        if not in_run_section or not R["wells"]:
+        if not in_run_section or not R['wells']:
             return
-        _OPERATE_MODS = {"*MAX", "*MIN", "*BHP", "*STO", "*STG", "*STW",
-                         "*RESV", "*DRAWDOWN", "*RATIO"}
-        parts = []
-        while self._peek():
-            _, tok2 = self._peek()
-            if _is_kw(tok2) and tok2.upper() not in _OPERATE_MODS:
-                break
-            parts.append(tok2)
-            self.pos += 1
 
-        # 解析 *MAX/*MIN *BHP/*STO/*STG value
+        lineno = self._last_lineno()
+        parts = self._read_same_line_tokens(lineno)
+
         mode = None
         target = None
         value = None
-        for i, p in enumerate(parts):
+        for p in parts:
             pu = p.upper()
-            if pu in ("*MAX", "*MIN"):
-                mode = pu.lstrip("*")
-            elif pu in ("*BHP", "*STO", "*STG", "*STW", "*RESV"):
-                target = pu.lstrip("*")
+            if pu in ('*MAX', '*MIN'):
+                mode = pu.lstrip('*')
+            elif pu in ('*BHP', '*STO', '*STG', '*STW', '*RESV'):
+                target = pu.lstrip('*')
             else:
                 try:
                     value = _to_float(p)
                 except ValueError:
                     pass
         if target and value is not None:
-            w = R["wells"][-1]
-            if target == "BHP":
-                if mode == "MAX":
-                    w["bhp_max"] = value
-                else:
-                    w["bhp_min"] = value
-            elif target in ("STO", "STG", "STW"):
-                if mode == "MAX":
-                    w["rate_max"] = value
-
-    def _parse_perf(self, R, in_run_section, perf_kw="*PERF"):
-        if not in_run_section or not R["wells"]:
-            return
-        # 可选：井号
-        t = self._peek()
-        if t and not _is_kw(t[1]):
-            try:
-                int(t[1])
-                self.pos += 1
-            except ValueError:
-                pass
-        # 读取所有射孔行：i j k wi
-        w = R["wells"][-1]
-        while self._peek():
-            _, tok = self._peek()
-            if _is_kw(tok):
-                break
-            nums = []
-            for _ in range(4):
-                t2 = self._peek()
-                if t2 and not _is_kw(t2[1]):
-                    expanded = _expand_repeat(t2[1])
-                    if expanded:
-                        nums.extend(expanded)
-                        self.pos += 1
+            for w in self._wells_for_selector(R):
+                if target == 'BHP':
+                    if mode == 'MAX':
+                        w['bhp_max'] = value
                     else:
-                        try:
-                            nums.append(_to_float(t2[1]))
-                            self.pos += 1
-                        except ValueError:
-                            break
-                else:
-                    break
-            if len(nums) >= 3:
-                wi = nums[3] if len(nums) >= 4 else -1.0
-                if wi <= 0:
-                    wi = -1.0  # 占位符，由 generator 计算
-                w["perforations"].append({
-                    "i": int(nums[0]), "j": int(nums[1]), "k": int(nums[2]),
-                    "wi": wi,
-                    "perf_type": perf_kw.lstrip("*"),
-                })
-            else:
+                        w['bhp_min'] = value
+                elif target in ('STO', 'STG', 'STW'):
+                    if mode == 'MAX':
+                        w['rate_max'] = value
+
+    def _parse_perf(self, R, in_run_section, perf_kw='*PERF'):
+        if not in_run_section or not R['wells']:
+            return
+
+        lineno = self._last_lineno()
+        header_tokens = self._read_same_line_tokens(lineno)
+        selector = []
+        use_geo = False
+        for tok in header_tokens:
+            if tok.upper() == '*GEO':
+                use_geo = True
+                continue
+            expanded = self._expand_int_token(tok)
+            if expanded:
+                selector = expanded
                 break
+
+        wells = self._wells_for_selector(R, selector)
+        if use_geo and self.last_geometry:
+            for w in wells:
+                w['well_radius'] = self.last_geometry.get('well_radius')
+                w['geofac'] = self.last_geometry.get('geofac')
+                w['wfrac'] = self.last_geometry.get('wfrac')
+                w['skin'] = self.last_geometry.get('skin')
+
+        while self._peek() and not _is_kw(self._peek()[1]):
+            row_lineno = self._peek()[0]
+            row_tokens = self._read_same_line_tokens(row_lineno)
+            if not row_tokens:
+                continue
+
+            if perf_kw == '*PERFV':
+                k_vals = self._expand_int_token(row_tokens[0]) or []
+                try:
+                    wi = _to_float(row_tokens[1]) if len(row_tokens) > 1 else -1.0
+                except ValueError:
+                    wi = -1.0
+                if wi <= 0:
+                    wi = -1.0
+                for w in wells:
+                    wi_i = w.get('well_i')
+                    wi_j = w.get('well_j')
+                    if wi_i is None or wi_j is None:
+                        continue
+                    for k in k_vals:
+                        w['perforations'].append({
+                            'i': int(wi_i), 'j': int(wi_j), 'k': int(k),
+                            'wi': wi,
+                            'perf_type': perf_kw.lstrip('*'),
+                        })
+                continue
+
+            if len(row_tokens) < 3:
+                break
+            i_vals = self._expand_int_token(row_tokens[0]) or []
+            j_vals = self._expand_int_token(row_tokens[1]) or []
+            k_vals = self._expand_int_token(row_tokens[2]) or []
+            try:
+                wi = _to_float(row_tokens[3]) if len(row_tokens) > 3 else -1.0
+            except ValueError:
+                wi = -1.0
+            if wi <= 0:
+                wi = -1.0
+            for w in wells:
+                for ii in i_vals:
+                    for jj in j_vals:
+                        for kk in k_vals:
+                            w['perforations'].append({
+                                'i': int(ii), 'j': int(jj), 'k': int(kk),
+                                'wi': wi,
+                                'perf_type': perf_kw.lstrip('*'),
+                            })
 
     def _parse_perfv(self, R, in_run_section):
-        self._parse_perf(R, in_run_section, "*PERFV")
+        self._parse_perf(R, in_run_section, '*PERFV')
 
     def _parse_geometry(self, R, in_run_section):
-        if not in_run_section or not R["wells"]:
+        if not in_run_section or not R['wells']:
             return
-        # *GEOMETRY *K rad [geofac wfrac skin]
-        t = self._peek()
-        if t and _is_kw(t[1]):
-            self.pos += 1  # 消耗 *K/*I/*J
+
+        lineno = self._last_lineno()
+        tokens = self._read_same_line_tokens(lineno)
         nums = []
-        for _ in range(4):
-            t = self._peek()
-            if t and not _is_kw(t[1]):
-                try:
-                    nums.append(_to_float(t[1]))
-                    self.pos += 1
-                except ValueError:
-                    break
-            else:
-                break
+        for tok in tokens:
+            if _is_kw(tok):
+                continue
+            try:
+                nums.append(_to_float(tok))
+            except ValueError:
+                pass
         if nums:
-            w = R["wells"][-1]
-            w["well_radius"] = nums[0]
-            if len(nums) > 1: w["geofac"] = nums[1]
-            if len(nums) > 2: w["wfrac"] = nums[2]
-            if len(nums) > 3: w["skin"] = nums[3]
+            geom = {
+                'well_radius': nums[0],
+                'geofac': nums[1] if len(nums) > 1 else None,
+                'wfrac': nums[2] if len(nums) > 2 else None,
+                'skin': nums[3] if len(nums) > 3 else None,
+            }
+            self.last_geometry = geom
+            for w in self._wells_for_selector(R):
+                w['well_radius'] = geom['well_radius']
+                if geom['geofac'] is not None:
+                    w['geofac'] = geom['geofac']
+                if geom['wfrac'] is not None:
+                    w['wfrac'] = geom['wfrac']
+                if geom['skin'] is not None:
+                    w['skin'] = geom['skin']
 
     def _parse_alter(self, R, in_run_section):
-        if not in_run_section or not R["wells"]:
+        if not in_run_section or not R['wells']:
             return
-        t = self._peek()
-        if not t or _is_kw(t[1]):
+
+        lineno = self._last_lineno()
+        raw_tokens = self._read_same_line_tokens(lineno)
+        raw_tokens.extend(self._collect_numeric_tokens_until_kw())
+
+        selector = []
+        if raw_tokens:
+            maybe_selector = self._expand_int_token(raw_tokens[0])
+            if maybe_selector and len(raw_tokens) > 1:
+                selector = maybe_selector
+                raw_tokens = raw_tokens[1:]
+
+        values = self._expand_numeric_tokens(raw_tokens)
+        well_indices = self._resolve_well_indices(R, selector)
+        if not well_indices or not values:
             return
-        try:
-            well_idx = int(t[1])
-            self.pos += 1
-        except ValueError:
-            return
-        t = self._peek()
-        if not t or _is_kw(t[1]):
-            return
-        try:
-            new_rate = _to_float(t[1])
-            self.pos += 1
-        except ValueError:
-            return
-        for w in reversed(R["wells"]):
-            if w.get("well_index") == well_idx:
-                w["alter_schedule"].append({
-                    "time": R.get("_current_time", 0.0),
-                    "rate": new_rate,
-                })
-                break
+
+        if len(values) == 1:
+            values = values * len(well_indices)
+        elif len(values) < len(well_indices):
+            values.extend([values[-1]] * (len(well_indices) - len(values)))
+
+        for idx, new_rate in zip(well_indices, values):
+            well = self._find_well(R, idx)
+            if well is None:
+                continue
+            well['alter_schedule'].append({
+                'time': R.get('_current_time', 0.0),
+                'rate': new_rate,
+            })
 
     def _parse_time(self, R, in_run_section):
         if not in_run_section:
@@ -672,16 +857,18 @@ class CMGParser:
             lineno, tok = self._next()
             u = tok.upper()
 
-            # 忽略关键字
-            if u in ignore_set:
-                continue
-
-            # *RUN 标记动态段开始
-            if u == "*RUN":
+            if u in {'*RUN', 'RUN'}:
                 in_run_section = True
                 continue
 
-            # ── 从 YAML 注册表分发 ─────────────────────────────────────────
+            if u in ignore_set:
+                self._skip_same_line_tokens(lineno)
+                continue
+
+            if u in _LINE_IGNORE_KWS or u in {'RESULTS', 'SIMULATOR', 'IMEX', '*WELLNN', '*WELLN'}:
+                self._skip_same_line_tokens(lineno)
+                continue
+
             if u in kw_map:
                 entry = kw_map[u]
                 fmt = entry["format"]

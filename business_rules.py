@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
+from utils.pvt_metadata import apply_pvt_role
 from utils.rule_loader import get_loader
 
 
@@ -97,13 +98,18 @@ def merge_pvt_saturated_only(fluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         merged.append([p, rs_cmg, bo, eg, viso, visg])
 
     merged.sort(key=lambda r: r[0])
-    return {
+    return apply_pvt_role({
         "type": "table",
         "columns": ["p", "rs", "bo", "eg", "viso", "visg"],
         "rows": merged,
         "source": "business_rules.merge_pvt_saturated_only",
         "confidence": 0.99,
-    }
+    },
+        pvt_form="cmg_pvt_table",
+        representation_role="derived_for_cmg",
+        preferred_backend="cmg",
+        derived_from=["fluid.pvto_table", "fluid.pvdg_table"],
+    )
 
 
 def _interp1d(x: float, xs: List[float], ys: List[float]) -> float:
@@ -120,6 +126,28 @@ def _interp1d(x: float, xs: List[float], ys: List[float]) -> float:
     return ys[-1]
 
 
+def _sanitize_monotonic_prefix(rows: List[List[float]], *, x_index: int = 0) -> List[List[float]]:
+    cleaned: List[List[float]] = []
+    prev_x: Optional[float] = None
+    for row in rows or []:
+        if row is None or len(row) <= x_index:
+            continue
+        try:
+            vals = [float(v) for v in row]
+            x = float(vals[x_index])
+        except (TypeError, ValueError):
+            continue
+        if prev_x is not None and x < prev_x - 1e-9:
+            break
+        cleaned.append(vals)
+        prev_x = x
+
+    dedup: Dict[float, List[float]] = {}
+    for row in cleaned:
+        dedup.setdefault(round(float(row[x_index]), 8), row)
+    return [dedup[k] for k in sorted(dedup.keys())]
+
+
 def _merge_swt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """SWFN(sw,krw,pcow) + SOF3/SOF2 → SWT(sw,krw,krow,pcow)"""
     swfn = rockfluid.get("swfn_table")
@@ -128,9 +156,9 @@ def _merge_swt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not swfn:
         return None
 
-    swfn_rows = swfn["rows"]
-    sof3_rows = sof3["rows"] if sof3 else None
-    sof2_rows = sof2["rows"] if sof2 else None
+    swfn_rows = _sanitize_monotonic_prefix(swfn["rows"], x_index=0)
+    sof3_rows = _sanitize_monotonic_prefix(sof3["rows"], x_index=0) if sof3 else None
+    sof2_rows = _sanitize_monotonic_prefix(sof2["rows"], x_index=0) if sof2 else None
 
     if sof3_rows:
         so_x = [r[0] for r in sof3_rows]
@@ -143,13 +171,17 @@ def _merge_swt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     rows = []
     for row in swfn_rows:
+        if len(row) < 3:
+            continue
         sw, krw, pcow = row[0], row[1], row[2]
         if so_x:
             so = 1.0 - sw
             krow = _interp1d(so, so_x, krow_y)
         else:
             krow = max(0.0, 1.0 - sw)
-        rows.append([sw, krw, max(0.0, krow), max(0.0, pcow)])
+        rows.append([min(1.0, max(0.0, sw)), max(0.0, krw), max(0.0, krow), max(0.0, pcow)])
+
+    rows = _sanitize_monotonic_prefix(rows, x_index=0)
 
     return {
         "type": "table",
@@ -169,8 +201,8 @@ def _merge_slt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     # 路径1：标准 SGFN
     if sgfn:
-        sgfn_rows = sgfn["rows"]
-        sof3_rows = sof3["rows"] if sof3 else None
+        sgfn_rows = _sanitize_monotonic_prefix(sgfn["rows"], x_index=0)
+        sof3_rows = _sanitize_monotonic_prefix(sof3["rows"], x_index=0) if sof3 else None
 
         if sof3_rows:
             so_x = [r[0] for r in sof3_rows]
@@ -180,6 +212,8 @@ def _merge_slt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
         rows = []
         for row in sgfn_rows:
+            if len(row) < 3:
+                continue
             sg, krg, pcog = row[0], row[1], row[2]
             sl = 1.0 - sg
             if so_x:
@@ -187,9 +221,12 @@ def _merge_slt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                 krog = _interp1d(so, so_x, krog_y)
             else:
                 krog = sg
-            rows.append([sl, max(0.0, krg), max(0.0, krog), max(0.0, pcog)])
+            rows.append([min(1.0, max(0.0, sl)), max(0.0, krg), max(0.0, krog), max(0.0, pcog)])
 
-        rows.sort(key=lambda r: r[0])
+        dedup: Dict[float, List[float]] = {}
+        for sl, krg, krog, pcog in rows:
+            dedup.setdefault(round(sl, 8), [sl, krg, krog, pcog])
+        rows = [dedup[k] for k in sorted(dedup.keys())]
         return {
             "type": "table",
             "columns": ["sl", "krg", "krog", "pcog"],
@@ -200,8 +237,8 @@ def _merge_slt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     # 路径2：保底 SWFN + SOF2
     if swfn and sof2:
-        swfn_rows = swfn["rows"]
-        sof2_rows = sorted(sof2["rows"], key=lambda r: float(r[0]))
+        swfn_rows = _sanitize_monotonic_prefix(swfn["rows"], x_index=0)
+        sof2_rows = _sanitize_monotonic_prefix(sof2["rows"], x_index=0)
         swc = float(swfn_rows[0][0]) if swfn_rows else 0.0
         sw_x = [float(r[0]) for r in swfn_rows]
         pcow_y = [float(r[2]) for r in swfn_rows]
@@ -251,20 +288,134 @@ def _merge_slt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return None
 
 
-def merge_rockfluid_tables(rockfluid: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
-    """
-    统一返回 CMG 所需 swt/slt 表。
-    优先使用已有 swt/slt（或 swof/sgof），否则尝试由 swfn/sgfn/sof3 合并。
-    """
+def _sgof_to_slt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Eclipse/Petrel 的 SGOF(sg, krg, krog, pcog) → CMG SLT(sl, krg, krog, pcog)。"""
+    sgof = rockfluid.get("sgof_table")
+    if not sgof:
+        return None
+
+    rows = []
+    for row in sgof.get("rows", []):
+        if len(row) < 4:
+            continue
+        sg, krg, krog, pcog = [float(v) for v in row[:4]]
+        sl = 1.0 - sg
+        rows.append([
+            min(1.0, max(0.0, sl)),
+            min(1.0, max(0.0, krg)),
+            min(1.0, max(0.0, krog)),
+            pcog,
+        ])
+
+    if not rows:
+        return None
+
+    dedup: Dict[float, List[float]] = {}
+    for sl, krg, krog, pcog in rows:
+        dedup[round(sl, 8)] = [sl, krg, krog, pcog]
+    rows = [dedup[k] for k in sorted(dedup.keys())]
+
+    return {
+        "type": "table",
+        "columns": ["sl", "krg", "krog", "pcog"],
+        "rows": rows,
+        "confidence": 0.95,
+        "source": "business_rules.merge_rockfluid_tables(sgof->slt)",
+    }
+
+
+def _merge_rockfluid_single(rockfluid: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
     swt = rockfluid.get("swt_table") or rockfluid.get("swof_table")
-    slt = rockfluid.get("slt_table") or rockfluid.get("sgof_table")
+    slt = rockfluid.get("slt_table")
 
     if not swt:
         swt = _merge_swt(rockfluid)
     if not slt:
+        slt = _sgof_to_slt(rockfluid)
+    if not slt:
         slt = _merge_slt(rockfluid)
 
     return swt, slt
+
+
+def _table_set_count(rockfluid: Dict[str, Any], key: str) -> int:
+    sets = rockfluid.get(f"{key}_sets")
+    if isinstance(sets, list) and sets:
+        return len(sets)
+    return 1 if rockfluid.get(key) else 0
+
+
+def _table_at_index(rockfluid: Dict[str, Any], key: str, index: int) -> Optional[Dict[str, Any]]:
+    sets = rockfluid.get(f"{key}_sets")
+    if isinstance(sets, list) and 0 <= index < len(sets):
+        return sets[index]
+    if index == 0:
+        return rockfluid.get(key)
+    return None
+
+
+def _build_rockfluid_variant(rockfluid: Dict[str, Any], index: int) -> Dict[str, Any]:
+    variant: Dict[str, Any] = {}
+    for key in ("swt_table", "slt_table", "swof_table", "sgof_table", "swfn_table", "sgfn_table", "sof2_table", "sof3_table"):
+        tbl = _table_at_index(rockfluid, key, index)
+        if tbl:
+            variant[key] = tbl
+    return variant
+
+
+def _score_monotonic_table(tbl: Optional[Dict[str, Any]], sat_col: int, endpoint_cols: Optional[Tuple[int, int]] = None) -> float:
+    if not tbl or tbl.get("type") != "table":
+        return -1e9
+    rows = tbl.get("rows") or []
+    if not rows:
+        return -1e9
+    try:
+        sats = [float(r[sat_col]) for r in rows if len(r) > sat_col]
+    except (TypeError, ValueError):
+        return -1e9
+    score = float(len(rows))
+    if all(sats[i] <= sats[i + 1] for i in range(len(sats) - 1)):
+        score += 50.0
+    if sats:
+        if 0.0 <= sats[0] <= 1.0:
+            score += 5.0
+        if 0.0 <= sats[-1] <= 1.0:
+            score += 5.0
+    if endpoint_cols and rows:
+        lo_col, hi_col = endpoint_cols
+        try:
+            score -= abs(float(rows[0][lo_col])) * 20.0
+            score -= abs(1.0 - float(max(r[hi_col] for r in rows if len(r) > hi_col))) * 20.0
+        except (TypeError, ValueError, IndexError):
+            pass
+    return score
+
+
+def merge_rockfluid_tables(rockfluid: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """
+    ?????? CMG ???? swt/slt ????
+    ????????? swt/slt?????? Eclipse/Petrel ?????????????????
+    ????????? swfn/sgfn/sof3 ?????
+    ?????????????????CMG ??? backend ??????????????
+    """
+    keys = ("swt_table", "slt_table", "swof_table", "sgof_table", "swfn_table", "sgfn_table", "sof2_table", "sof3_table")
+    max_sets = max((_table_set_count(rockfluid, key) for key in keys), default=0)
+
+    best_pair = _merge_rockfluid_single(rockfluid)
+    best_score = _score_monotonic_table(best_pair[0], 0, endpoint_cols=(1, 2)) + _score_monotonic_table(best_pair[1], 0, endpoint_cols=(2, 1))
+
+    if max_sets > 1:
+        for idx in range(max_sets):
+            variant = _build_rockfluid_variant(rockfluid, idx)
+            if not variant:
+                continue
+            pair = _merge_rockfluid_single(variant)
+            score = _score_monotonic_table(pair[0], 0, endpoint_cols=(1, 2)) + _score_monotonic_table(pair[1], 0, endpoint_cols=(2, 1))
+            if score > best_score:
+                best_pair = pair
+                best_score = score
+
+    return best_pair
 
 
 def derive_co_from_pvto(fluid: Dict[str, Any]) -> float:
@@ -413,7 +564,13 @@ def derive_miscible_pvts(fluid: Dict[str, Any], initial: Dict[str, Any]) -> Opti
             omega_s = omegasg * (p - pbs_value) / (p_max - pbs_value)
         rows.append([p, 0.0, es, visg, max(0.0, min(omegasg if omegasg > 0 else 1.0, omega_s))])
 
-    return _table_obj(["p", "rss", "es", "viss", "omega_s"], rows, source="business_rules.derive_miscible_pvts")
+    return apply_pvt_role(
+        _table_obj(["p", "rss", "es", "viss", "omega_s"], rows, source="business_rules.derive_miscible_pvts"),
+        pvt_form="cmg_pvts_table",
+        representation_role="derived_for_cmg",
+        preferred_backend="cmg",
+        derived_from=["fluid.pvdg_table", "initial.bubble_point_pressure"],
+    )
 
 
 def enrich_miscible_model(

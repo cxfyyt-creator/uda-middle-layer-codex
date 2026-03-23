@@ -11,8 +11,11 @@ from pathlib import Path
 from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.confidence_checks import evaluate_confidence
+from utils.pvt_metadata import apply_pvt_role
 from utils.rule_loader import get_loader
 from utils.reporting import write_report_bundle
+from utils.target_preflight import evaluate_target_preflight
 
 # ── 格式化工具 ────────────────────────────────────────────────────────────────
 
@@ -316,10 +319,22 @@ class PetrelGenerator:
         rows6 = pvt6["rows"]  # [p, rs, bo, eg, viso, visg]
         pvto_rows = [[r[1], r[0], r[2], r[4]] for r in rows6]  # rs,p,bo,viso
         pvdg_rows = [[r[0], 1.0/r[3] if r[3] > 0 else 0.0, r[5]] for r in rows6]  # p,bg,visg
-        pvto = {"type": "table", "columns": ["rs","p","bo","viso"],
-                "rows": pvto_rows, "confidence": 0.9, "source": "split from pvt_table"}
-        pvdg = {"type": "table", "columns": ["p","bg","visg"],
-                "rows": pvdg_rows, "confidence": 0.9, "source": "split from pvt_table"}
+        pvto = apply_pvt_role(
+            {"type": "table", "columns": ["rs","p","bo","viso"],
+             "rows": pvto_rows, "confidence": 0.9, "source": "split from pvt_table"},
+            pvt_form="eclipse_pvto",
+            representation_role="derived_for_petrel",
+            preferred_backend="petrel",
+            derived_from=["fluid.pvt_table"],
+        )
+        pvdg = apply_pvt_role(
+            {"type": "table", "columns": ["p","bg","visg"],
+             "rows": pvdg_rows, "confidence": 0.9, "source": "split from pvt_table"},
+            pvt_form="eclipse_pvdg",
+            representation_role="derived_for_petrel",
+            preferred_backend="petrel",
+            derived_from=["fluid.pvt_table"],
+        )
         return pvto, pvdg
 
     def _write_rockfluid(self, lines, rockfluid):
@@ -520,15 +535,52 @@ def generate_petrel(data_or_json, output_file=None, report_dir="outputs/reports/
     else:
         data = data_or_json
 
-    # ROCK 数据在 reservoir 节点，给 generator 合并进 fluid 便于写 PROPS
+    # ROCK ??? reservoir ???? generator ??? fluid ??? PROPS
     data = dict(data)
     res = data.get("reservoir", {})
-    fl  = dict(data.get("fluid", {}))
+    fl = dict(data.get("fluid", {}))
     if not fl.get("rock_ref_pressure") and res.get("rock_ref_pressure"):
         fl["rock_ref_pressure"] = res["rock_ref_pressure"]
     if not fl.get("rock_compressibility") and res.get("rock_compressibility"):
         fl["rock_compressibility"] = res["rock_compressibility"]
     data["fluid"] = fl
+
+    def _write_failed_report(errors, warnings=None):
+        md_path, json_path = write_report_bundle(
+            report_dir=report_dir,
+            source_name=Path(source_name).name,
+            report_type="generate_petrel",
+            title="Petrel generation report",
+            summary_items=[
+                ("output_file", "(not written)"),
+                ("line_count", 0),
+                ("well_count", len(data.get("wells", []))),
+                ("grid_type", data.get("grid", {}).get("grid_type", "unknown")),
+            ],
+            warnings=warnings or [],
+            errors=errors,
+            details={
+                "stage": "pre_generation_validation",
+                "preflight": preflight,
+                "confidence_check": confidence_check,
+            },
+        )
+        data.setdefault("_generate_report", {"md": str(md_path), "json": str(json_path)})
+
+    preflight = evaluate_target_preflight(data, target="petrel")
+    confidence_check = evaluate_confidence(data, target="petrel")
+    if preflight["blockers"]:
+        _write_failed_report(preflight["blockers"], warnings=preflight["warnings"])
+        raise ValueError(
+            "Petrel generation blocked by preflight checks: "
+            + "; ".join(preflight["blockers"])
+        )
+    if confidence_check["blockers"]:
+        _write_failed_report(confidence_check["blockers"], warnings=preflight["warnings"] + confidence_check["warnings"])
+        raise ValueError(
+            "Petrel generation blocked by very low-confidence critical fields: "
+            + "; ".join(confidence_check["blockers"])
+        )
 
     content = PetrelGenerator().generate(data)
 
@@ -541,19 +593,25 @@ def generate_petrel(data_or_json, output_file=None, report_dir="outputs/reports/
 
     warnings = []
     if not data.get("wells"):
-        warnings.append("未发现井数据，SCHEDULE 可能只有静态段")
+        warnings.append("no wells found; SCHEDULE may contain only static content")
+    warnings.extend(f"preflight: {w}" for w in preflight["warnings"][:10])
+    if len(preflight["warnings"]) > 10:
+        warnings.append(f"preflight: omitted {len(preflight['warnings']) - 10} more items")
+    warnings.extend(f"low confidence: {w}" for w in confidence_check["warnings"][:10])
+    if len(confidence_check["warnings"]) > 10:
+        warnings.append(f"low confidence: omitted {len(confidence_check['warnings']) - 10} more items")
 
     summary = [
-        ("输出文件", str(out_path) if out_path else "(未写盘)"),
-        ("行数", len(content.splitlines())),
-        ("井数量", len(data.get("wells", []))),
-        ("网格类型", data.get("grid", {}).get("grid_type", "CART")),
+        ("output_file", str(out_path) if out_path else "(not written)"),
+        ("line_count", len(content.splitlines())),
+        ("well_count", len(data.get("wells", []))),
+        ("grid_type", data.get("grid", {}).get("grid_type", "CART")),
     ]
     md_path, json_path = write_report_bundle(
         report_dir=report_dir,
         source_name=Path(source_name).name,
         report_type="generate_petrel",
-        title="Petrel 生成报告",
+        title="Petrel generation report",
         summary_items=summary,
         warnings=warnings,
         errors=[],
@@ -562,6 +620,8 @@ def generate_petrel(data_or_json, output_file=None, report_dir="outputs/reports/
             "has_sgof": bool(data.get("rockfluid", {}).get("sgof_table")),
             "has_swt": bool(data.get("rockfluid", {}).get("swt_table")),
             "has_slt": bool(data.get("rockfluid", {}).get("slt_table")),
+            "preflight": preflight,
+            "confidence_check": confidence_check,
         },
     )
     data.setdefault("_generate_report", {"md": str(md_path), "json": str(json_path)})
