@@ -1,0 +1,191 @@
+   ******************************************************************************
+   ** mxfrr028.dat:         Dual Porosity Fractured Model using SIGMAMF        **
+   ******************************************************************************
+   **************************************************************************************
+   **                                                                                  **
+   ** FILE:                 MXFRR028.DAT                                               **
+   **                                                                                  **
+   ** MODEL:  10x10x1               DUAL POROSITY (SIGMAMF)         UPWARD LAYERING    **
+   **         2 ROCK TYPES          OIL-WATER TWP PHASES            FIELD UNIT         **
+   **                                                                                  **
+   **************************************************************************************
+   **                                                                                  **
+   ** A cartesian 10x10x1, oil-water two phase model. One set of orthogonal fractures  **
+   ** consisting of three fracture planes at matrix volume of 100X100X100 cubic feet.  **
+   ** Fracture spacing in all the directions is not required due to the direct input   **
+   ** of block shape factor and trasfer permeability arrays.                           **
+   **                                                                                  **
+   **************************************************************************************
+   ** CONTACT:    CMG,   (403)531-1300;   282-6495 (fax);support@cmgl.ca    (Internet) **
+   **************************************************************************************
+
+RESULTS SIMULATOR IMEX
+
+   ********************************************************************************
+   ** I/O Control Section
+   ********************************************************************************
+   *TITLE1  'Two Phase, Dual Porosity - SIGMAMF'
+   *TITLE2  '10 x 10 areal two phase problem.'
+
+   *INUNIT *FIELD
+   *WPRN   *WELL 10
+   *WPRN   *GRID 10 
+   *WPRN   *ITER *BRIEF
+   *WRST   0
+   *WSRF   *GRID   *TIME
+   *WSRF   *WELL   1
+   *OUTSRF *GRID   *SO *PRES     
+   *OUTPRN *GRID *EXCEPT *DATUMPRES 
+     
+
+   ********************************************************************************
+   ** Reservoir Description Section
+   ********************************************************************************
+
+   *GRID *CART  10  10  1          ** Regular grid, areal problem with 
+                                   ** 10 blocks in the I direction and j
+                                   ** direction.  Only 1 block thick.
+   *CONVERT-TO-CORNER-POINT 
+
+   *DI *CON 102.04                 ** Dimensions are constant in I and J
+   *DJ *CON 102.04                 ** directions.  The reservoir is 100.00
+   *DK *CON 100.00                 ** feet thick
+
+   *DEPTH 1 1 1 2000.00            ** reference depth is taken from left-
+                                   ** most, bottommost block at 2000 ft
+   *DUALPOR
+
+   *SIGMAMF *CON 0.0012            ** Shape Factor Array (equivalent to DIFRAC=DJFRAC=DKFRAC=100)
+   *KAVMF *CON 100                 ** Transfer Permeability Array
+
+   *POR *MATRIX   *CON   0.1392    ** Porosity for matrix blocks is constant throughout
+   *POR *FRACTURE *CON   0.039585  ** Porosity for fracture blocks is constant throughout
+
+   *PRPOR *MATRIX 15.0             ** Compressibilities for the rock and 
+   *CPOR  *MATRIX  3.0E-6          ** the fracture are the same and 
+   *PRPOR *FRACTURE 15.0           ** constant throughout.
+   *CPOR  *FRACTURE  3.0E-6
+ 
+   *PERMI *MATRIX *CON  100.0      ** Permeability for the rock.
+   *PERMJ *MATRIX *CON  100.0
+   *PERMK *MATRIX *CON  100.0
+ 
+   *PERMI *FRACTURE *CON  395.85   ** Permeability for the fracture.
+   *PERMJ *FRACTURE *CON  395.85
+   *PERMK *FRACTURE *CON  395.85
+
+                                                                
+   ********************************************************************************
+   ** Component Properties section
+   ********************************************************************************
+   *MODEL *OILWATER                ** Two phase, water-oil problem.
+
+   *PVT
+   ** p    rs      bo     eg   vo     vg
+   15.0   100.0   1.036  100.0  40.0   1.0
+
+   *DENSITY *OIL   58.0
+   *DENSITY *GAS    1.0
+   *DENSITY *WATER 62.4
+ 
+   *CO       1.3130E-5
+   *CVO      0.0
+   *BWI      1.0
+   *CW       3.50E-6                                           
+   *REFPW   15.0
+   *VWI      0.8
+   *CVW      0.0      
+                                                          
+
+   ********************************************************************************
+   ** Rock-fluid Properties Section
+   ********************************************************************************
+   *ROCKFLUID
+   *RPT  1
+   *SWT
+   **  Sw  krw     krow   Pcow
+     0.01  0.0     0.99   2.140
+     0.1   0.091   0.90   1.780
+     0.2   0.192   0.80   1.418
+     0.3   0.293   0.70   1.096
+     0.4   0.394   0.60   0.814
+     0.5   0.495   0.50   0.573
+     0.6   0.596   0.40   0.372
+     0.7   0.697   0.30   0.214
+     0.8   0.798   0.20   0.0978
+     0.9   0.899   0.10   0.0256
+     1.0   1.0     0.0    0.0
+   *RPT  2
+   *SWT
+   **  Sw    krw       krow       Pcow
+     0.08    0.0       0.589      13.360
+     0.10    0.004172  0.477      12.395
+     0.20    0.0264    0.141       8.036
+     0.30    0.0492    0.0277      4.496
+     0.40    0.0723    0.002314    1.859
+     0.50    0.0957    1.0740E-5   0.274
+     0.549   0.1072    0.0         0.0
+     1.00    0.1072    0.0         0.0   
+
+   *RTYPE *FRACTURE *CON 1
+   *RTYPE *MATRIX   *CON 2   
+
+
+   ********************************************************************************
+   ** Initial Condition Section
+   ********************************************************************************
+   *INITIAL
+
+   *USER_INPUT 
+   *PRES     *MATRIX   *CON  1479.0
+   *SO       *MATRIX   *CON     0.92
+   *PRES     *FRACTURE *CON  1463.0
+   *SO       *FRACTURE *CON     0.99 
+   *PB       *MATRIX *CON 15.0   
+   *PB       *FRACTURE *CON 15.0   
+
+
+   ********************************************************************************
+   ** Numerical Methods Control Section
+   ********************************************************************************
+   *NUMERICAL
+   *AIM  *OFF            ** This problem is run fully implicit
+   *NORM *PRESS 500.0
+
+
+   ********************************************************************************
+   ** Well Data Section
+   ********************************************************************************
+
+   *RUN 
+   *DATE 1994 01 01                              
+   *DTMAX  100.00
+   *DTWELL   1.00
+
+   *WELL 1 'Water Injector'        ** Define well 1 and well 2.
+   *WELL 2 'Producer'
+
+   *INJECTOR *UNWEIGHT 1           ** Define well 1 as an injector.
+   *INCOMP *WATER                  ** It injects water.
+   *OPERATE *MAX *STW    500.00    ** Primary operating constraint 
+   *OPERATE *MAX *BHP  50000.00 *STOP
+   *MONITOR *BACKFLOW           *STOP
+
+   *PRODUCER 2                     ** Define well 2 as a producer.
+   *OPERATE *MAX *STL     500.00   ** Primary operating constraint.
+   *OPERATE *MIN *BHP      15.00 *STOP
+   *MONITOR *BACKFLOW            *STOP
+ 
+   *PERF  1             
+   ** if     jf     kf     wi 
+      1      1      1     200.0
+   
+   *PERF  2             
+   ** if     jf     kf     wi 
+      10     10     1   1.0000E+6
+
+   *AIMSET *FRACTURE *CON 1        ** Set all blocks implicit
+   *AIMSET *MATRIX   *CON 1
+
+   *TIME 1600.0                    ** Normal termination should occur here.
+   *STOP

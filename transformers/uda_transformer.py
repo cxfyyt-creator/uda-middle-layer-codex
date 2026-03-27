@@ -10,6 +10,7 @@ from business_rules import (
     ensure_co_cvo,
     merge_pvt_saturated_only,
     merge_rockfluid_tables,
+    resolve_equalsi_references,
 )
 
 
@@ -43,7 +44,8 @@ def transform_raw_to_standard(raw: Dict[str, Any]) -> Dict[str, Any]:
     - 统一增加 uda_version / unparsed_blocks
     """
     grid = dict(raw.get("grid", {}))
-    reservoir = apply_radial_perm_j(grid, dict(raw.get("reservoir", {})))
+    reservoir = resolve_equalsi_references(dict(raw.get("reservoir", {})))
+    reservoir = apply_radial_perm_j(grid, reservoir)
     fluid = dict(raw.get("fluid", {}))
     rockfluid = dict(raw.get("rockfluid", {}))
     initial = dict(raw.get("initial", {}))

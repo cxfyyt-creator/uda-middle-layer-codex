@@ -1,0 +1,342 @@
+   **************************************************************************************
+   **                   mxfrr021.dat                                                   **
+   ** This is a 7x7x15 test case for the MINC-DK option                                **
+   ** This model Mimics a 9x9 LGR single porosity fracture model                       **
+   **                                                                                  **  
+   **************************************************************************************
+
+        ** Description of this case:
+        **  1) MINC 5 with innermost cell made vanishingly small on purpose
+        **  2) TRANSD CON 1 - Turns on MINC-DK
+        **  3) DKFRAC=0.0 in order to properly use MINC-DK
+        **  4) Real/Intrinsic fracture width assumed to be 0.02 ft
+        **  5) Real/Intrinsic fracture Perm assumed to be 100,000 mD
+        **  6) Effective fracture properties derived from 4) and 5) above and 
+        **     fracture/block spacing
+   **************************************************************************************
+   ** CONTACT:    CMG,   (403)531-1300;   282-6495 (fax);support@cmgl.ca    (Internet) **
+   **************************************************************************************                                
+
+RESULTS SIMULATOR IMEX
+
+********************************************************************************
+** I/O Control Section                                                        **
+********************************************************************************
+
+*TITLE1
+'MINC-DK Model'
+*TITLE2
+'Darcy Flow'
+
+*INUNIT *FIELD             
+*WPRN   *WELL TIME
+*WPRN   *GRID 0
+*WSRF   *SECTOR 1
+*OUTPRN *GRID *PRES *SO *SW  *SG
+*OUTPRN *TABLES NONE
+*WSRF   *GRID   0
+OUTSRF RES ALL
+*WSRF   *WELL   1
+outsrf well downhole
+*OUTSRF *GRID pres sw sg  rfg 
+wprn iter matrix
+**$  Distance units: ft 
+RESULTS XOFFSET           0.0000
+RESULTS YOFFSET           0.0000
+RESULTS ROTATION           0.0000  **$  (DEGREES)
+**$ ***************************************************************************
+**$ Definition of fundamental cartesian grid
+**$ ***************************************************************************
+GRID VARI 7 7 15
+KDIR DOWN
+
+MINC 5
+
+fracvol   0.000000001d0   0.737869315d0 0.223333252d0 0.033946681d0 0.004850751d0
+
+TRANSD CON 1
+
+DIFRAC CON 150.0
+DJFRAC CON 150.0
+DKFRAC CON 0.0
+
+DI CON 150.0d0
+DJ CON 150.0d0
+DK CON 30.0d0
+
+DTOP
+ 49*950
+
+*CPOR matrix  1.0E-6            
+*PRPOR matrix 3600.0              
+*CPOR fracture  1.0E-6            
+*PRPOR fracture 3600.0              
+
+
+PERMI  MATRIX CON   1e-2
+PERMJ  MATRIX CON   1e-2
+PERMK  MATRIX CON   1e-2
+
+** 0.02*30ft2 X 1   = 0.6 ft2, 0.6/150x30 = 1.33d-04, 1.33d-04 x 100000 = 13.333 for i and j
+** 0.02*150ft2 X 2   = 6 ft2, 6/150x150 = 2.66d-04, 2.66d-04 x 100000 = 26.666 for k
+
+PERMI  FRACTURE CON   13.333
+PERMJ  FRACTURE CON   13.333
+PERMK  FRACTURE CON   26.666
+
+
+
+POR  matrix CON  0.05
+por fracture con 0.0002666
+** por fracture (assume 2 sheets of fractures,
+** (30x150x0.02) X 2 = 180 
+** por Fracture = 180/(150x150x30) = 0.0002666    
+     
+*MODEL *BLACKOIL            
+********************************************************************************
+** Component Property Section                                                 **
+********************************************************************************
+*TRES 100
+*PVT  *ZG 1
+** p       rs     bo    zg    viso     visg
+  14.7       0 1.0000   1.0   1.20    .02
+   400     165 1.0120   1.0   1.17    .02
+   800     335 1.0255   1.0   1.14    .02
+  1200     500 1.0380   1.0   1.11    .02
+  1600     665 1.0510   1.0   1.08    .02
+  2000     828 1.0630   1.0   1.06    .02
+  2400     985 1.0750   1.0   1.03    .02
+  2800    1130 1.0870   1.0   1.00    .02
+  3200    1270 1.0985   1.0    .98    .02
+  3600    1390 1.1100   1.0    .95    .02
+  4000    1500 1.1200   1.0    .94    .02
+  9000    1510 1.1210   1.0    .93    .02
+*DENSITY *OIL    44.986
+*GRAVITY *GAS     0.818
+*DENSITY *WATER  63.021
+*CO    1.0E-5
+*BWI   1.0034
+*CW    3.0E-6
+*REFPW 3600
+*VWI   0.96
+*CVW   0.0
+*PVT  *ZG 2
+** p       rs     bo    zg    viso     visg
+  14.7       0 1.0000   1.0   1.20    .02
+   400     165 1.0120   1.0   1.17    .02
+   800     335 1.0255   1.0   1.14    .02
+  1200     500 1.0380   1.0   1.11    .02
+  1600     665 1.0510   1.0   1.08    .02
+  2000     828 1.0630   1.0   1.06    .02
+  2400     985 1.0750   1.0   1.03    .02
+  2800    1130 1.0870   1.0   1.00    .02
+  3200    1270 1.0985   1.0    .98    .02
+  3600    1390 1.1100   1.0    .95    .02
+  4000    1500 1.1200   1.0    .94    .02
+  9000    1510 1.1210   1.0    .93    .02
+*DENSITY *OIL    44.986
+*GRAVITY *GAS     0.818
+*DENSITY *WATER  63.021
+*CO    1.0E-5
+*BWI   1.0034
+*CW    3.0E-6
+*REFPW 3600
+*VWI   0.96
+*CVW   0.0
+
+ptype fracture con 1
+ptype matrix con 1
+
+*ROCKFLUID
+********************************************************************************
+** Rock-Fluid Property Section                                                **
+********************************************************************************
+RPT 1
+** sw          krw     krow       
+SWT
+**$        Sw         krw        krow
+          0.2           0           1   40
+      0.24375  0.00149536    0.878906   33.78
+       0.2875  0.00598145    0.765625   28.25
+      0.33125   0.0134583    0.660156   23.36
+        0.375   0.0239258      0.5625   19.07
+      0.41875    0.037384    0.472656   15.34
+       0.4625    0.053833    0.390625   12.12
+      0.50625   0.0732727    0.316406    9.3
+         0.55   0.0957031        0.25    7.2
+      0.59375    0.121124    0.191406   *int
+       0.6375    0.149536    0.140625   *int
+      0.68125    0.180939   0.0976563   *int
+        0.725    0.215332      0.0625   *int
+      0.76875    0.252716   0.0351562   *int
+       0.8125    0.293091    0.015625   *int
+      0.85625    0.336456  0.00390625   *int
+          0.9    0.382812           0   *int
+         0.95    0.439453           0   *int
+            1         0.5           0   0.00
+** sl        krg    krog   
+SGT
+**$        Sg         krg        krog
+            0           0           1
+      0.04375  0.00299072    0.878906
+       0.0875   0.0119629    0.765625
+      0.13125   0.0269165    0.660156
+        0.175   0.0478516      0.5625
+      0.21875   0.0747681    0.472656
+       0.2625    0.107666    0.390625
+      0.30625    0.146545    0.316406
+         0.35    0.191406        0.25
+      0.39375    0.242249    0.191406
+       0.4375    0.299072    0.140625
+      0.48125    0.361877   0.0976563
+        0.525    0.430664      0.0625
+      0.56875    0.505432   0.0351563
+       0.6125    0.586182    0.015625
+      0.65625    0.672913  0.00390625
+          0.7    0.765625           0
+         0.75    0.878906           0
+          0.8           1           0
+
+RPT 2
+** sw          krw     krow       
+SWT
+**$        Sw         krw        krow
+        0.005         0.0     1.0  
+        0.025          *INT    *INT    
+        0.050          *INT    *INT    
+        0.100          *INT    *INT     
+        0.200          *INT    *INT    
+        0.400          *INT    *INT     
+        0.500          *INT    *INT     
+        0.600          *INT    *INT     
+        0.700          *INT    *INT     
+        0.800          *INT    *INT     
+        0.900          *INT    *INT     
+        0.950          *INT    *INT    
+        0.975          *INT    *INT    
+            1          1.0     0.0  
+** sl        krg    krog   
+SGT
+**$        Sg         krg        krog
+          0.0          0.0     1.0  
+        0.025          *INT    *INT    
+        0.050          *INT    *INT    
+        0.100          *INT    *INT     
+        0.200          *INT    *INT    
+        0.400          *INT    *INT     
+        0.500          *INT    *INT     
+        0.600          *INT    *INT     
+        0.700          *INT    *INT     
+        0.800          *INT    *INT     
+        0.900          *INT    *INT     
+        0.950          *INT    *INT    
+        0.975          *INT    *INT    
+        0.995         1.0     0.0  
+
+
+RTYPE matrix    CON     1
+RTYPE fracture  CON     2
+
+*INITIAL
+********************************************************************************
+** Initial Conditions Section                                                 **
+********************************************************************************
+*VERTICAL *BLOCK_CENTER     
+**$ Property: Bubble Point Pressure (psi)   Max: 400  Min: 400
+PB CON       900
+*REFDEPTH   1050.  1050.        
+*REFPRES    3000.  3000.         
+*DWOC       2000.  700.           
+*DGOC       500.   500.       
+
+*NUMERICAL
+********************************************************************************
+** Numerical Control Section                                                  **
+********************************************************************************
+*DTMAX       15.0
+*DTMIN       0.000000001
+*NORTH       80
+*ITERMAX     80
+converge maxres 0.25
+*NORM *PRESS 100.0
+NORM SATUR 0.250
+*NCUTS 12
+*SDEGREE 1
+
+*RUN
+********************************************************************************
+** Well and Recurrent Data Section                                            **
+********************************************************************************
+*DATE 2000 01 01
+*DTWELL 0.000001
+**$
+WELL  'Producer1'
+PRODUCER 'Producer1'
+OPERATE  MIN  BHP  2991.7  CONT 
+** kf     ff
+**$          rad  geofac  wfrac  skin
+GEOMETRY  K 0.25  0.37  1.  0.
+PERF GEOA  'Producer1'
+**$ UBA                                              wi  Status  Connection  
+    1 1 1  1000  OPEN    FLOW-TO  'SURFACE'
+
+WELL  'Injector1'
+INJECTOR MOBWEIGHT 'Injector1'
+INCOMP WATER
+OPERATE  MAX  STW  100.  CONT 
+** kf     ff
+**$          rad  geofac  wfrac  skin
+GEOMETRY K 0.25  0.37  1.  0.
+PERF  GEOA  'Injector1'
+**$ UBA                                              wi  Status  Connection  
+   7 7 15  1000  OPEN    FLOW-TO  'SURFACE'
+
+**$ Property: Implicit flag  Max: 1  Min: 1
+
+*DATE 2000 01 15
+*DATE 2000 02 01
+*DATE 2000 03 01
+*DATE 2000 04 01
+*DATE 2000 05 01
+*DATE 2000 06 01
+*DATE 2000 07 01
+*DATE 2000 08 01
+*DATE 2000 09 01
+*DATE 2000 10 01
+*DATE 2000 11 01
+*DATE 2000 12 01
+*DATE 2001 01 01
+*DATE 2001 02 01
+*DATE 2001 03 01
+*DATE 2001 04 01
+*DATE 2001 05 01
+*DATE 2001 06 01
+*DATE 2001 07 01
+*DATE 2001 08 01
+*DATE 2001 09 01
+*DATE 2001 10 01
+*DATE 2001 11 01
+*DATE 2001 12 01
+*DATE 2002 01 01
+*DATE 2002 07 01
+*DATE 2003 01 01
+*DTMAX 60.0
+*DATE 2003 07 01
+*DATE 2004 01 01
+*DATE 2004 07 01
+*DATE 2005 01 01
+*DATE 2005 07 01
+*DATE 2006 01 01
+*DATE 2006 07 01
+*DATE 2007 01 01
+*DATE 2007 07 01
+*DATE 2008 01 01
+*DATE 2008 07 01
+*DATE 2009 01 01
+*DATE 2009 07 01
+*DATE 2010 01 01
+*STOP
+
+
+
+

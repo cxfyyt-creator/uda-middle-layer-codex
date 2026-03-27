@@ -1,0 +1,244 @@
+******************************************************************************
+** mxfrr013.dat:          Dual Porosity Option with GK shape factor         **                 
+******************************************************************************
+**************************************************************************************
+**                                                                                  **
+** FILE:   MXFRR013.DAT                                                             **
+**                                                                                  **
+** MODEL:  5x5x3 GRIDS                     2 PHASES                   DUAL POROSITY **
+**         GK SHAPE FACTOR                 WATER INJECTION            FIELD UNIT    **        
+**         VERTICAL ON INITIALIZATION                                               **
+**                                                                                  **        
+**************************************************************************************
+**                                                                                  **
+** An  oil-water  two-phase  model  for  testing Dual-Porosity Option with GK shape **
+** factor.  Model contains a water injector.                                        ** 
+**                                                                                  **
+**************************************************************************************
+** CONTACT:    CMG,   (403)531-1300;   282-6495 (fax);support@cmgl.ca    (Internet) **
+**************************************************************************************                                
+
+RESULTS SIMULATOR IMEX
+
+*FILENAME *OUTPUT *INDEX-OUT *MAIN-RESULTS-OUT
+
+********************************************************************************
+** I/O Control Section                                                        **
+********************************************************************************
+
+*TITLE1
+ 'Dual Porosity Test'
+*TITLE2
+ '5 x 5 x 3 Grids'
+*TITLE3
+ 'With Water Injection'
+
+*INUNIT   *FIELD             
+*WPRN     *WELL     1 
+*WPRN     *GRID     1
+**WPRN    *ITER    *ALL
+*OUTPRN   *WELL    *ALL
+*OUTPRN   *RES     *ALL
+*OUTPRN   *TABLES  *ALL
+*OUTPRN   *GRID    *SO *SG *SW *PRES *IMEXMAP
+*WSRF     *GRID    0
+*WSRF     *WELL    0
+*OUTSRF   *GRID    *SO *SG  *PRES  *BPP
+
+
+********************************************************************************
+** Reservoir Description Section                                              **
+********************************************************************************
+*GRID *CART 5     5    3
+*KDIR *DOWN
+
+*DI   *CON  300.0
+*DJ   *CON  300.0
+*DK   *CON   30.0
+
+*DEPTH      1 1 1  3600.0
+*DUALPOR
+*SHAPE      *GK         
+                   
+*DIFRAC     *CON       
+             50.0               
+*DJFRAC     *CON       
+             50.0
+*DKFRAC     *CON
+             50.0
+
+*POR        *MATRIX   *CON   0.20
+*PRPOR      *MATRIX         3600.0
+*CPOR       *MATRIX         4.0E-6
+*POR        *FRACTURE *CON   0.20
+*PRPOR      *FRACTURE       3600.0
+*CPOR       *FRACTURE       4.0E-6
+
+*PERMI      *MATRIX   *CON  300.0
+*PERMJ      *MATRIX   *CON  300.0
+*PERMK      *MATRIX   *CON  300.0
+*PERMI      *FRACTURE *CON  300.0
+*PERMJ      *FRACTURE *CON  300.0
+*PERMK      *FRACTURE *CON  300.0
+
+
+*MODEL *BLACKOIL            ** Solve three equations.
+********************************************************************************
+** Component Property Section                                                 **
+********************************************************************************
+*PVT                            
+**    p      rs        bo        eg          viso     visg
+   400.000   165.000   1.01200   169.490    1.17000  0.0130
+   800.000   335.000   1.02550   338.980    1.14000  0.0135
+  1200.000   500.000   1.03800   510.200    1.11000  0.0140
+  1600.000   665.000   1.05100   680.270    1.08000  0.0145
+  2000.000   828.000   1.06300   847.460    1.06000  0.0150
+  2400.000   985.000   1.07500  1020.400    1.03000  0.0155
+  2800.000  1130.000   1.08700  1190.500    1.00000  0.0160
+  3200.000  1270.000   1.09850  1351.400  0.9800000  0.0165
+  3600.000  1390.000   1.11000  1538.500  0.9500000  0.0170
+  4000.000  1500.000   1.12000  1694.900  0.9400002  0.0175
+  4400.000  1600.000   1.13000  1851.900  0.9200000  0.0180
+  4800.000  1676.000   1.14000  2040.800  0.9100000  0.0185
+  5200.000  1750.000   1.14800  2222.200  0.9000000  0.0190
+  5600.000  1810.000   1.15500  2381.000  0.8900000  0.0195
+
+*DENSITY    *OIL       45.0
+*DENSITY    *GAS       0.0702
+*DENSITY    *WATER     62.14
+*CO                    1.0E-5        ** Oil compressibility
+*CVO                   0.0           ** Viscosity dependence on oil compressibility
+*BWI                   1.01420       ** Water formation volume factor
+*CW                    3.0E-6        ** Water compressibility
+*REFPW                 14.7          ** Reference pressure
+*VWI                   0.96          ** Water viscosity at reference pressure
+*CVW                   0.0           ** Pressure dependence on water compressibility
+
+
+*ROCKFLUID
+********************************************************************************
+** Rock-Fluid Property Section                                                **
+********************************************************************************
+
+*RPT  1                              ** Set rock type 1 for the matrix
+*SWT
+**   sw    krw     krow      pcow
+   0.22    0.0     1.0       6.3
+   0.30    0.07    0.4       3.6
+   0.40    0.15    0.125     2.7
+   0.50    0.24    0.0649    2.25
+   0.60    0.33    0.0048    1.8
+   0.80    0.65    0.0       0.9
+   0.90    0.83    0.0       0.45
+   1.00    1.0     0.0       0.0
+
+*SLT                                 ** Liquid-gas relative permeability table.
+**   sl     krg    krog      pcog
+   0.22    1.0     0.0       3.9
+   0.30    0.8125  0.0       3.5
+   0.40    0.5     0.0       3.0
+   0.50    0.42    0.0       2.5
+   0.60    0.34    0.0       2.0
+   0.70    0.24    0.02      1.5
+   0.80    0.1     0.1       1.0
+   0.90    0.022   0.33      0.5
+   0.96    0.0     0.6       0.2
+   1.0     0.0     1.0       0.0
+
+*RPT 2                               ** Set rock type 2 for the matrix.
+*SWT
+** Sw    krw       krow      Pcow
+  0.20   0.0       1.0       5.00
+  0.25   0.0004    0.6027    4.00
+  0.30   0.0024    0.4490    3.00
+  0.31   0.0033    0.4165    2.80
+  0.35   0.0075    0.3242    2.50
+  0.40   0.0167    0.2253    2.00
+  0.45   0.0310    0.1492    1.80
+  0.50   0.0515    0.0927    1.60
+  0.60   0.1146    0.0265    1.40
+  0.70   0.2133    0.0031    1.20
+  0.80   0.3542    0.0       1.00
+  0.90   0.5438    0.0       0.50
+  1.00   0.7885    0.0       0.00
+
+*SLT
+** Sl    krg       krog      Pcog
+  0.30   0.6345    0.0       1.92
+  0.40   0.5036    0.00002   1.15
+  0.50   0.3815    0.00096   0.77
+  0.60   0.2695    0.00844   0.50
+  0.70   0.1692    0.03939   0.32
+  0.80   0.0835    0.13010   0.22
+  0.85   0.0477    0.21670   0.18
+  0.90   0.0183    0.34540   0.15
+  0.95   0.0       0.53020   0.12
+  1.00   0.0       1.00000   0.10
+ 
+
+*RTYPE  *MATRIX    *CON  1         ** and set 2 to the matrix blocks.
+*RTYPE  *FRACTURE  *CON  2         ** Assign set 1 to the fracture blocks                                                                      
+
+
+*INITIAL
+********************************************************************************
+** Initial Conditions Section                                                 **
+********************************************************************************
+*VERTICAL  *ON                     ** Use vertical equilibrium calculation.
+
+*PB        *MATRIX    *CON   0.0
+*PB        *FRACTURE  *CON   0.0
+*REFPRES     3600.0
+*REFDEPTH    3600.0
+*DWOC        3700.0
+*DGOC        3590.0
+
+
+*NUMERICAL
+********************************************************************************
+** Numerical Control Section                                                  **
+********************************************************************************
+*DTMAX                110.         ** Maximum time step size
+*MAXSTEPS             200          ** Maximum number of time steps
+*NORM     *PRESS     1000.0        ** Normal maximum changes per time step
+*NORM     *SATUR     0.20
+*AIM      *OFF
+*SORDER   *NATURAL
+
+
+*RUN
+********************************************************************************
+** Well and Recurrent Data Section                                            **
+********************************************************************************
+*DATE 1988  01  01
+*DTWELL     0.005
+                  
+
+*WELL  1   'Producer'
+
+*PRODUCER  1
+*OPERATE   *MAX      *STL     3000.0
+*OPERATE   *MIN      *BHP     1500.0
+*MONITOR   *BACKFLOW          *STOP
+*MONITOR   *GOR      50000.0  *STOP
+*GEOMETRY  *I   0.1875  0.5    1.0     0.0 
+*PERF      *GEO    1
+** if  jf  kf     ff                         
+    2  3   1      1.0
+
+*WELL 2  'Injector'
+
+*INJECTOR  2    
+*INCOMP   *WATER
+*OPERATE  *MAX       *BHP      3700.0
+*MONITOR  *BACKFLOW  *STOP
+
+*PERF 2
+** if   jf   kf     wi
+   1:5   3    3   2.160E+04
+
+*AIMSET *MATRIX    *CON 1
+*AIMSET *FRACTURE  *CON 1
+
+*TIME  720.0
+*STOP

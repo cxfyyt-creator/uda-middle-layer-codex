@@ -150,8 +150,10 @@ cmg:
 
     "*PVT":       {format: pvt6}
     "*PVTS":      {format: table, json: {section: fluid, key: pvts_table}, columns: [p, rss, es, viss, omega_s], ncols: 5}
+    "*ZG":        {format: custom, handler: _parse_zg}
     "*MODEL":     {format: custom, handler: _parse_model}
     "*DENSITY":   {format: density_typed}
+    "*GRAVITY":   {format: custom, handler: _parse_gravity}
     "*BWI":       {format: scalar_inline, json: {section: fluid, key: water_fvf}, unit: "RB/STB"}
     "*CW":        {format: scalar_inline, json: {section: fluid, key: water_compressibility}, unit: "1/psi"}
     "*REFPW":     {format: scalar_inline, json: {section: fluid, key: water_ref_pressure}, unit: psia}
@@ -165,16 +167,44 @@ cmg:
     "*RPT":       {format: skip_int}
     "*SWT":       {format: rpt_table, json: {section: rockfluid, key: swt_table}, columns: [sw, krw, krow, pcow]}
     "*SLT":       {format: rpt_table, json: {section: rockfluid, key: slt_table}, columns: [sl, krg, krog, pcog]}
+    "*SGT":       {format: rpt_table, json: {section: rockfluid, key: sgt_table}, columns: [sg, krg, krog, pcog]}
 
     "*REFDEPTH":  {format: scalar_inline, json: {section: initial, key: ref_depth}, unit: ft}
     "*REFPRES":   {format: scalar_inline, json: {section: initial, key: ref_pressure}, unit: psia}
+    "*DATUMDEPTH": {format: scalar_inline, json: {section: initial, key: ref_depth}, unit: ft}
     "*DWOC":      {format: scalar_inline, json: {section: initial, key: woc_depth}, unit: ft}
     "*DGOC":      {format: scalar_inline, json: {section: initial, key: goc_depth}, unit: ft}
     "*PB":        {format: array, json: {section: initial, key: bubble_point_pressure}, unit: psia}
     "*PBS":       {format: array, json: {section: initial, key: solvent_bubble_point_pressure}, unit: psia}
+    "*PBUB":      {format: array, json: {section: initial, key: bubble_point_pressure}, unit: psia}
+    "*PRES":      {format: array, json: {section: initial, key: pressure_table}, unit: psia}
+    "*SW":        {format: array, json: {section: initial, key: water_saturation}, unit: fraction}
+    "*SO":        {format: array, json: {section: initial, key: oil_saturation}, unit: fraction}
+    "*SG":        {format: array, json: {section: initial, key: gas_saturation}, unit: fraction}
 
     "*DTMAX":     {format: scalar_inline, json: {section: numerical, key: max_timestep}, unit: day}
     "*MAXSTEPS":  {format: scalar_inline, json: {section: numerical, key: max_steps}, unit: null}
+    "*NORM":      {format: custom, handler: _parse_control_directive}
+    "*AIM":       {format: custom, handler: _parse_control_directive}
+    "*AIMSET":    {format: custom, handler: _parse_control_directive}
+    "*SDEGREE":   {format: custom, handler: _parse_control_directive}
+    "*MAXCHANGE": {format: custom, handler: _parse_control_directive}
+    "*PRECC":     {format: custom, handler: _parse_control_directive}
+    "*TRES":      {format: scalar_inline, json: {section: fluid, key: reservoir_temperature}, unit: F}
+    "*NOLIST":    {format: custom, handler: _parse_control_directive}
+    "*SOLVER":    {format: custom, handler: _parse_solver_directive}
+    "*PNTHRDS":   {format: custom, handler: _parse_solver_directive}
+    "*COMBINATIVE": {format: custom, handler: _parse_solver_directive}
+    "*FGMRES":    {format: custom, handler: _parse_solver_directive}
+    "*COMB-DRS":  {format: custom, handler: _parse_solver_directive}
+    "*AMG-ITERMAX": {format: custom, handler: _parse_solver_directive}
+    "*AMG-SMOOTHER": {format: custom, handler: _parse_solver_directive}
+    "*AMG-SETUP-FREQ": {format: custom, handler: _parse_solver_directive}
+    "*AMG-EPS":   {format: custom, handler: _parse_solver_directive}
+    "*AMG-KRYLOV": {format: custom, handler: _parse_solver_directive}
+    "*AMG-COARSEN": {format: custom, handler: _parse_solver_directive}
+    "*EQUALSI":   {format: custom, handler: _parse_equalsi}
+    "*DIP":       {format: custom, handler: _parse_grid_directive}
 
     "*WELL":      {format: custom, handler: _parse_well}
     "*PRODUCER":  {format: custom, handler: _parse_producer}
@@ -185,6 +215,8 @@ cmg:
     "*PERFV":     {format: custom, handler: _parse_perfv}
     "*GEOMETRY":  {format: custom, handler: _parse_geometry}
     "*ALTER":     {format: custom, handler: _parse_alter}
+    "*OPEN":      {format: custom, handler: _parse_open}
+    "*SHUTIN":    {format: custom, handler: _parse_shutin}
     "*TIME":      {format: custom, handler: _parse_time}
     "*DATE":      {format: custom, handler: _parse_date}
     "*DTWELL":    {format: scalar_inline, json: {section: meta, key: dtwell}, unit: day}
@@ -209,6 +241,7 @@ generators:
 
     fluid:
       pvt_table:             {keyword: "*PVT", format: pvt6}
+      reservoir_temperature: {keyword: "*TRES", format: scalar_inline}
       oil_density:           {keyword: "*DENSITY *OIL", format: scalar_inline}
       gas_density:           {keyword: "*DENSITY *GAS", format: scalar_inline}
       water_density:         {keyword: "*DENSITY *WATER", format: scalar_inline}
@@ -228,12 +261,16 @@ generators:
       slt_table: {keyword: "*SLT", format: rpt_table}
 
     initial:
+      pressure_table:        {keyword: "*PRES", format: array}
       ref_pressure:          {keyword: "*REFPRES", format: scalar_inline}
       ref_depth:             {keyword: "*REFDEPTH", format: scalar_inline}
       woc_depth:             {keyword: "*DWOC", format: scalar_inline}
       goc_depth:             {keyword: "*DGOC", format: scalar_inline}
       bubble_point_pressure: {keyword: "*PB", format: array}
       solvent_bubble_point_pressure: {keyword: "*PBS", format: array}
+      water_saturation:      {keyword: "*SW", format: array}
+      oil_saturation:        {keyword: "*SO", format: array}
+      gas_saturation:        {keyword: "*SG", format: array}
 
     numerical:
       max_timestep: {keyword: "*DTMAX", format: scalar_inline}

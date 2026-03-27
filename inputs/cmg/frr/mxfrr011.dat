@@ -1,0 +1,202 @@
+******************************************************************************
+** mxfrr011.dat:          Dual Perm. Option with GK shape factor            **                 
+******************************************************************************
+**************************************************************************************
+**                                                                                  **
+** FILE:   MXFRR011.DAT                                                             **
+**                                                                                  **
+** MODEL:  10x10x1                         2D AREAL                      2 PHASES   **
+**         DUAL PERMEABILITY               GK SHAPE FACTOR               FIELD UNIT **        
+**         USER SPECIFIED INITIALIZATION   SOME NULL FRACTURE BLOCKS                **
+**                                                                                  **        
+**************************************************************************************
+**                                                                                  **
+** An oil-water two-phase areal model for testing Dual-Permeability Option with GK  **
+** shape factor.  Some null fracture blocks in model.  Model is run fully implicit. ** 
+**                                                                                  **
+**************************************************************************************
+** CONTACT:    CMG,   (403)531-1300;   282-6495 (fax);support@cmgl.ca    (Internet) **
+**************************************************************************************                                
+
+RESULTS SIMULATOR IMEX
+
+*FILENAME *OUTPUT *INDEX-OUT *MAIN-RESULTS-OUT
+
+********************************************************************************
+** I/O Control Section
+********************************************************************************
+
+*TITLE1
+ 'Dual-Permeability Test'
+*TITLE2
+ 'Some Null Fracture Blocks'
+*TITLE3
+ 'GK Shape Factor'
+ 
+*INUNIT    *FIELD
+*WPRN      *WELL     10
+*WPRN      *GRID     10 
+*WPRN      *ITER   *ALL
+*WRST        0
+*WSRF      *GRID   *TIME
+*WSRF      *WELL     1
+*OUTSRF    *GRID   *SO     *PRES     
+*OUTPRN    *GRID   *EXCEPT *DATUMPRES 
+*OUTPRN    *RES    *ALL
+
+     
+********************************************************************************
+** Reservoir Description Section
+********************************************************************************
+*GRID   *CART  10  10  1            ** Regular grid, areal problem with 
+                                    ** 10 blocks in the I direction and j
+                                    ** direction.  Only 1 block thick.
+*DI     *CON 102.04                 ** Dimensions are constant in I and J
+*DJ     *CON 102.04                 ** directions.  The reservoir is 100.00
+*DK     *CON 100.00                 ** feet thick.
+*DEPTH       1 1 1   2000.00        ** reference depth is taken from left-
+                                    ** most, bottommost block at 2000 ft.
+ 
+*DUALPERM
+*SHAPE *GK
+                                    ** of the innermost submatrix block.
+    
+*DIFRAC *CON 100.0                  ** fracture spacing in I,J and K directions.
+*DJFRAC *CON 100.0
+*DKFRAC *CON 100.0
+
+*POR    *MATRIX    *CON   0.1392    ** Porosity for matrix blocks is constant
+                                    ** throughout.
+
+*POR    *FRACTURE  *CON   0.039585  ** Porosity for fracture blocks is constant
+                                    ** throughout.
+*MOD    1:10  1  1 = 0.0
+
+*PRPOR  *MATRIX    15.0             ** Compressibilities for the rock and 
+*CPOR   *MATRIX    3.0E-6           ** the fracture are the same and 
+*PRPOR  *FRACTURE  15.0             ** constant throughout.
+*CPOR   *FRACTURE  3.0E-6
+ 
+*PERMI  *MATRIX   *CON  100.0       ** Permeability for the rock.
+*PERMJ  *MATRIX   *CON  100.0
+*PERMK  *MATRIX   *CON   10.0
+ 
+*PERMI  *FRACTURE *CON  395.85      ** Permeability for the fracture.
+*PERMJ  *FRACTURE *CON  395.85
+*PERMK  *FRACTURE *CON  395.85
+                                                                 
+
+********************************************************************************
+** Component Properties section
+********************************************************************************
+*MODEL *OILWATER                ** Two phase, water-oil problem.
+
+*PVT
+**  p    rs      bo     eg    vo     vg
+  15.0  100.0  1.036  100.0  40.0   1.00
+  30.0  110.0  1.050  120.0  39.0   1.01
+
+*DENSITY *OIL   58.0
+*DENSITY *GAS    1.0
+*DENSITY *WATER 62.4
+ 
+*CO       1.3130E-5
+*CVO         0.0
+*BWI         1.0
+*CW       3.50E-6                                           
+*REFPW      15.0
+*VWI         0.8
+*CVW         0.0      
+                                                       
+
+********************************************************************************
+** Rock-fluid Properties Section
+********************************************************************************
+*ROCKFLUID
+
+*RPT  1
+*SWT
+**  Sw      krw       krow        Pcow
+   0.01    0.000      0.99       2.140
+   0.10    0.091      0.90       1.780
+   0.20    0.192      0.80       1.418
+   0.30    0.293      0.70       1.096
+   0.40    0.394      0.60       0.814
+   0.50    0.495      0.50       0.573
+   0.60    0.596      0.40       0.372
+   0.70    0.697      0.30       0.214
+   0.80    0.798      0.20       0.0978
+   0.90    0.899      0.10       0.0256
+   1.00    1.000      0.00       0.0
+*RPT  2
+*SWT
+**  Sw     krw        krow        Pcow
+   0.08    0.0        0.589     13.360
+   0.10    0.004172   0.477     12.395
+   0.20    0.0264     0.141      8.036
+   0.30    0.0492     0.0277     4.496
+   0.40    0.0723     0.002314   1.859
+   0.50    0.0957     1.0740E-5  0.274
+   0.549   0.1072     0.0        0.0
+   1.00    0.1072     0.0        0.0
+
+*RTYPE   *FRACTURE   *CON  1
+*RTYPE   *MATRIX     *CON  2
+
+
+********************************************************************************
+** Initial Condition Section
+********************************************************************************
+*INITIAL
+
+*USER_INPUT 
+*PRES       *MATRIX   *CON    1479.0
+*SO         *MATRIX   *CON     0.92
+*PRES       *FRACTURE *CON    1463.0
+*SO         *FRACTURE *CON     0.99 
+*PB         *MATRIX   *CON     15.0   
+*PB         *FRACTURE *CON     15.0
+
+
+********************************************************************************
+** Numerical Methods Control Section
+********************************************************************************
+*NUMERICAL
+*MAXSTEPS            999
+
+********************************************************************************
+** Well Data Section
+********************************************************************************
+*RUN 
+*DATE 1995  01  01                              
+
+*DTMAX      62.00
+*DTWELL      1.00
+*AIMSET *FRACTURE *CON  1              ** Set all blocks implicit
+*AIMSET *MATRIX   *CON  1              ** This problem is run fully implicit
+
+*WELL  1    'Water Injector'                   ** Define well 1 and well 2.
+*WELL  2    'Producer'
+
+*INJECTOR   *UNWEIGHT    1                     ** Define well 1 as an injector.
+*INCOMP     *WATER                             ** It injects water.
+*OPERATE    *MAX       *STW     500.00         ** Primary operating constraint 
+*OPERATE    *MAX       *BHP   50000.00  *STOP
+*MONITOR    *BACKFLOW                   *STOP
+
+*PRODUCER    2                                 ** Define well 2 as a producer.
+*OPERATE    *MAX       *STL     500.00         ** Primary operating constraint.
+*OPERATE    *MIN       *BHP      15.00  *STOP
+*MONITOR    *BACKFLOW                   *STOP
+ 
+*PERF  1             
+** if   jf   kf    wi 
+   1    1    1    200.0
+
+*PERF  2             
+** if   jf   kf   wi 
+   10   10   1   1.0000E+6
+
+
+*TIME 1600.0                           ** Normal termination should occur here.
+*STOP

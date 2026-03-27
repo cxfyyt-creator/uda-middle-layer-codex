@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any, Dict, List, Optional, Tuple
 
 from utils.pvt_metadata import apply_pvt_role
@@ -288,14 +289,13 @@ def _merge_slt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _sgof_to_slt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Eclipse/Petrel 的 SGOF(sg, krg, krog, pcog) → CMG SLT(sl, krg, krog, pcog)。"""
-    sgof = rockfluid.get("sgof_table")
-    if not sgof:
+def _sgx_to_slt(table_obj: Optional[Dict[str, Any]], *, source_name: str) -> Optional[Dict[str, Any]]:
+    """任意 sg-based 表(sg, krg, krog, pcog) -> CMG SLT(sl, krg, krog, pcog)。"""
+    if not table_obj:
         return None
 
     rows = []
-    for row in sgof.get("rows", []):
+    for row in table_obj.get("rows", []):
         if len(row) < 4:
             continue
         sg, krg, krog, pcog = [float(v) for v in row[:4]]
@@ -320,8 +320,16 @@ def _sgof_to_slt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "columns": ["sl", "krg", "krog", "pcog"],
         "rows": rows,
         "confidence": 0.95,
-        "source": "business_rules.merge_rockfluid_tables(sgof->slt)",
+        "source": f"business_rules.merge_rockfluid_tables({source_name}->slt)",
     }
+
+
+def _sgof_to_slt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    return _sgx_to_slt(rockfluid.get("sgof_table"), source_name="sgof")
+
+
+def _sgt_to_slt(rockfluid: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    return _sgx_to_slt(rockfluid.get("sgt_table"), source_name="sgt")
 
 
 def _merge_rockfluid_single(rockfluid: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
@@ -330,6 +338,8 @@ def _merge_rockfluid_single(rockfluid: Dict[str, Any]) -> Tuple[Optional[Dict[st
 
     if not swt:
         swt = _merge_swt(rockfluid)
+    if not slt:
+        slt = _sgt_to_slt(rockfluid)
     if not slt:
         slt = _sgof_to_slt(rockfluid)
     if not slt:
@@ -603,6 +613,63 @@ def should_reverse_k_layers(grid: Dict[str, Any]) -> bool:
 
 def reorder_k_array(values: List[float], reverse: bool) -> List[float]:
     return list(reversed(values)) if reverse else list(values)
+
+
+def _scaled_value_object(obj: Dict[str, Any], scale: float, *, source: str, source_key: str) -> Dict[str, Any]:
+    out = deepcopy(obj)
+    t = out.get("type")
+    if t == "scalar":
+        out["value"] = float(out.get("value", 0.0)) * scale
+    elif t == "array":
+        out["values"] = [float(v) * scale for v in (out.get("values") or [])]
+    else:
+        return out
+
+    hint = dict(out.get("source_format_hint") or {})
+    hint.update({
+        "software": "cmg_imex",
+        "keyword": "*EQUALSI",
+        "source_key": source_key,
+        "scale": float(scale),
+    })
+    out["source_format_hint"] = hint
+    out["source"] = source
+    out["confidence"] = min(float(obj.get("confidence", 0.9)), 0.99)
+    return out
+
+
+def resolve_equalsi_references(section: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(section, dict):
+        return section
+
+    resolved = dict(section)
+    changed = True
+    while changed:
+        changed = False
+        for key, obj in list(resolved.items()):
+            if not isinstance(obj, dict):
+                continue
+            if obj.get("type") != "reference" or str(obj.get("relation", "")).upper() != "EQUALSI":
+                continue
+
+            source_key = obj.get("source_key")
+            if not source_key:
+                continue
+            source_obj = resolved.get(source_key)
+            if not isinstance(source_obj, dict):
+                continue
+            if source_obj.get("type") == "reference":
+                continue
+
+            scale = float(obj.get("scale", 1.0) or 1.0)
+            resolved[key] = _scaled_value_object(
+                source_obj,
+                scale,
+                source=f"business_rules.resolve_equalsi_references({source_key})",
+                source_key=str(source_key),
+            )
+            changed = True
+    return resolved
 
 
 def apply_radial_perm_j(grid: Dict[str, Any], reservoir: Dict[str, Any]) -> Dict[str, Any]:

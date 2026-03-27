@@ -1,0 +1,294 @@
+******************************************************************************
+** mxfrr015.dat:          Single Block Subdomain 5 Test Problem             **                 
+******************************************************************************
+**************************************************************************************
+**                                                                                  **
+** FILE:   MXFRR015.DAT                                                             **
+**                                                                                  **
+** MODEL:  1x1x1                           1D                            2 PHASES   **
+**         SUBDOMAIN                       GK SHAPE FACTOR               MODSI UNIT **        
+**                                                                                  **        
+**************************************************************************************
+**                                                                                  **
+** A Gas Oil model to test the subdomain option                                     **
+** This model should produce results identical to mxfrr016.dat                      ** 
+** Compare sector averge oil saturation for the sector 'M'                          **
+**                                                                                  **
+**    The average saturations in sector M should be approximately                   **
+**                                                                                  **
+**   Time (days)      So       Sg       Sw                                          **
+**  t=600           63.0%    16.0%     21.0%                                        **
+**  t=1200          54.5%    24.5%     21.0%                                        **
+**  t=2400          45.2%    33.8%     21.0%                                        **
+**************************************************************************************
+** CONTACT:    CMG,   (403)531-1300;   282-6495 (fax);support@cmgl.ca    (Internet) **
+**************************************************************************************                                
+
+RESULTS SIMULATOR IMEX
+
+*TITLE1
+'Subdom 5 model compare with mxfrr016'
+*INUNIT  *MODSI
+*OUTUNIT *MODSI
+*RANGECHECK     *ON
+*WRST *TIME
+*WPRN *WELL     *TIME
+*WPRN *GRID     *TIME
+*OUTPRN *GRID   *SO    *SW    *PRES
+*OUTPRN *TABLES *NONE
+*OUTPRN *RES    *NONE
+*WSRF   *WELL   *TIME
+*WSRF   *GRID   *TIME
+*OUTSRF *WELL
+*OUTSRF *GRID   *SO    *SW    *PRES
+*NOLIST
+*************************************
+** RESERVOIR DISCRIPTION AND GRID
+*************************************
+
+*GRID   *VARI  1    1    1
+*KDIR   *DOWN
+*SUBDOMAIN 5
+*DI    *IVAR
+ 5.
+*DJ    *JVAR
+ 5.
+*DK    *CON
+10.0
+*DTOP  
+1280.
+*SHAPE  *GK
+*DIFRAC *CON 5
+*DJFRAC *CON 5
+*DKFRAC *CON 10
+*POR    *MATRIX    *CON
+0.15
+*POR    *FRACTURE  *CON
+0.015
+*VOLMOD *FRACTURE  *CON
+5000
+*SECTOR  *MATRIX  'M' 1:1  1:1 1:1
+*PRPOR   *MATRIX
+   1.02
+*CPOR    *MATRIX
+   .62E-6
+*PRPOR   *FRACTURE
+   1.02
+*CPOR    *FRACTURE
+   .78E-6
+*PERMI   *MATRIX *CON
+5.
+*PERMI  *FRACTURE *CON
+100000
+*PERMJ  *EQUALSI             
+*PERMK  *EQUALSI
+*************************************
+** FLUID PROPERTIES  
+*************************************
+*MODEL  *BLACKOIL
+*PVT  *BG   1
+1.      0     1.000  1.00000  7.41  .0111   109.4E-06
+25.    19     1.102   .04515  4.13  .0116   109.4E-06
+31     23     1.115   .03536  3.79  .0119   109.4E-06
+55     40     1.147   .01748  3.18  .0132   109.4E-06
+75     51     1.158   .01133  3.10  .0152   109.4E-06
+100    62     1.166   .00748  3.02  .0191   109.4E-06
+125    72     1.173   .00573  2.98  .0241   109.4E-06
+150    80     1.177   .00488  2.93  .0290   109.4E-06
+175    89     1.180   .00441  2.90  .0333   109.4E-06
+200    96     1.182   .00412  2.88  .0369   109.4E-06
+*PVT  *BG   2
+1.      0     1.000  1.00000  7.41  .0111   109.4E-06
+25.    19     1.102   .04515  4.13  .0116   109.4E-06
+31     23     1.115   .03536  3.79  .0119   109.4E-06
+55     40     1.147   .01748  3.18  .0132   109.4E-06
+75     51     1.158   .01133  3.10  .0152   109.4E-06
+100    62     1.166   .00748  3.02  .0191   109.4E-06
+125    72     1.173   .00573  2.98  .0241   109.4E-06
+150    80     1.177   .00488  2.93  .0290   109.4E-06
+175    89     1.180   .00441  2.90  .0333   109.4E-06
+200    96     1.182   .00412  2.88  .0369   109.4E-06
+*DENSITY  *OIL  894.0  
+*DENSITY  *OIL  894.0  
+*DENSITY  *GAS  1.3324
+*DENSITY  *GAS  1.3324
+*DENSITY  *WATER  1008.5
+*CVO    5.853E-03
+*BWI    1.019
+*CW     4.065E-05
+*REFPW  179
+*VWI    0.37
+*CVW    0
+*PTYPE  *MATRIX *CON
+1
+*PTYPE  *FRACTURE *CON
+2
+*************************************
+** ROCK PROPERTIES    
+*************************************
+*ROCKFLUID
+*RPT 1   
+*SWT
+0.21    0.0      1.0        1.816
+0.25    0.013    0.7        1.038
+0.3     0.023    0.52       0.727
+0.35    0.042    0.378      0.519
+0.4     0.067    0.26       0.363
+0.45    0.113    0.168      0.259
+0.5     0.165    0.104      0.173
+0.6     0.32     0.024      0.069
+0.655   0.432    0.0        0.060
+1.0     1.0      0.0        0.0
+*SGT *NOSWC
+0.0     0.0      1.0        0.0510
+0.03    0.0      1.0        0.0520
+0.05    0.008    0.615      0.0524
+0.1     0.015    0.462      0.0535
+0.15    0.031    0.346      0.0546
+0.2     0.038    0.269      0.0558
+0.25    0.062    0.2        0.0569
+0.3     0.085    0.154      0.0580
+0.4     0.192    0.077      0.0602
+0.5     0.315    0.031      0.0741
+0.6     0.469    0.003      0.0994
+0.65    0.558    0.0        0.2931
+
+*RPT 2  
+
+*SWT
+0.  0.  1.
+1.  1.  0.
+*SGT *NOSWC
+0.0     0.0      1.0     0.0
+0.03    0.0      1.0     0.0
+0.05    0.008    0.615   0.0
+0.1     0.015    0.462   0.0
+0.15    0.031    0.346   0.0
+0.2     0.038    0.269   0.0
+0.25    0.062    0.2     0.0
+0.3     0.085    0.154   0.0
+0.4     0.192    0.077   0.0
+0.5     0.315    0.031   0.0
+0.6     0.469    0.003   0.0
+0.65    0.558    0.0     0.0
+ 1.    1.    0.    0
+*RTYPE  *MATRIX   *CON
+1
+*RTYPE  *FRACTURE *CON
+2
+*************************************
+** START INITIALIZATION   
+*************************************
+*INITIAL
+*VERTICAL *DEPTH_AVE *WATER_OIL_GAS *EQUIL
+*REFDEPTH  1285
+*REFPRES   179
+*PB *MATRIX   *CON
+179
+*PB *FRACTURE *CON
+179
+*DWOC 2000.0  ** matrix
+*DWOC 2000.0  ** fracture
+*DGOC 1.0     ** matrix
+*DGOC 2000.0  ** fracture
+*************************************
+**  NUMERICAL CONTROL SECTION
+*************************************
+** Default all Numerical control
+*RUN
+*DATE          1998 01 01
+*OUTPRN *GRID  *SO *SG *PRES
+
+
+*WELL     1 'PRODUCER'
+*PRODUCER 1
+*OPERATE *MAX *STO 200.0
+*OPERATE *MIN *BHP 500.00    
+**             rad   geofac  wfrac  skin
+*GEOMETRY  *K  0.25   0.37    1.0    0.0 
+*PERF      *GEO  1
+** If   Jf    Kf   ff
+    1    1     1   1.0
+*SHUTIN    1 
+
+*TIME   30
+*TIME   60
+*TIME   90
+*TIME   120
+*TIME   150
+*TIME   180
+*TIME   210
+*TIME   240
+*TIME   270
+*TIME   300
+*TIME   330
+*TIME   360
+*TIME   390
+*TIME   420
+*TIME   450
+*TIME   480
+*TIME   510
+*TIME   540
+*TIME   570
+*TIME   600
+*TIME   630
+*TIME   660
+*TIME   690
+*TIME   720
+*TIME   750
+*TIME   780
+*TIME   810
+*TIME   840
+*TIME   870
+*TIME   900
+*TIME   930
+*TIME   960
+*TIME   990
+*TIME   1020
+*TIME   1050
+*TIME   1080
+*TIME   1110
+*TIME   1140
+*TIME   1170
+*TIME   1200
+*TIME   1230
+*TIME   1260
+*TIME   1290
+*TIME   1320
+*TIME   1350
+*TIME   1380
+*TIME   1410
+*TIME   1440
+*TIME   1470
+*TIME   1500
+*TIME   1530
+*TIME   1560
+*TIME   1590
+*TIME   1620
+*TIME   1650
+*TIME   1680
+*TIME   1710
+*TIME   1740
+*TIME   1770
+*TIME   1800
+*TIME   1830
+*TIME   1860
+*TIME   1890
+*TIME   1920
+*TIME   1950
+*TIME   1980
+*TIME   2010
+*TIME   2040
+*TIME   2070
+*TIME   2100
+*TIME   2130
+*TIME   2160
+*TIME   2190
+*TIME   2220
+*TIME   2250
+*TIME   2280
+*TIME   2310
+*TIME   2340
+*TIME   2370
+*TIME   2400
+*STOP

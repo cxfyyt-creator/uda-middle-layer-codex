@@ -136,6 +136,7 @@ class ReservoirBlock(BaseModel):
 class FluidBlock(BaseModel):
     pvt_table: Optional[TableValue] = None
     pvts_table: Optional[TableValue] = None
+    reservoir_temperature: Optional[ScalarValue] = None
     oil_density: Optional[ScalarValue] = None
     gas_density: Optional[ScalarValue] = None
     water_density: Optional[ScalarValue] = None

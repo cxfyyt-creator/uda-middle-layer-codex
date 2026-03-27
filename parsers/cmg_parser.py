@@ -16,6 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.rule_loader import get_loader
 from utils.reporting import write_report_bundle
+from utils.cmg_case_dependencies import scan_cmg_case_dependencies
 from utils.pvt_metadata import apply_pvt_role
 from utils.value_semantics import apply_value_semantics
 
@@ -81,17 +82,20 @@ class CMGParser:
         self.filepath = Path(filepath)
         self.tokens = []
         self.pos = 0
+        self.raw_lines = []
         self._rl = get_loader()
         self.logger = logging.getLogger(__name__)
         self.unparsed_blocks = []
         self.active_well_indices = []
         self.last_geometry = None
+        self.default_geometry = None
 
     # ── Token 管理 ────────────────────────────────────────────────────────────
 
     def _load_tokens(self):
         with open(self.filepath, encoding="utf-8", errors="ignore") as f:
             lines = f.readlines()
+        self.raw_lines = [line.rstrip("\r\n") for line in lines]
 
         skip_next_text_line = False
         for lineno, raw in enumerate(lines, 1):
@@ -155,6 +159,57 @@ class CMGParser:
             toks.append(self._next()[1])
         return toks
 
+    def _is_line_first_token(self, off=0):
+        i = self.pos + off
+        if i >= len(self.tokens):
+            return False
+        if i == 0:
+            return True
+        return self.tokens[i][0] != self.tokens[i - 1][0]
+
+    def _is_top_level_kw_token(self, tok, *, off=0):
+        if not tok:
+            return False
+        tok_u = str(tok).upper()
+        if tok_u in {"RUN", "RESULTS", "SIMULATOR", "IMEX"}:
+            return self._is_line_first_token(off=off)
+        return _is_kw(tok) and self._is_line_first_token(off=off)
+
+    def _peek_next_top_level_kw(self):
+        off = 0
+        while self._peek(off):
+            _, tok = self._peek(off)
+            if self._is_top_level_kw_token(tok, off=off):
+                return self._peek(off)
+            off += 1
+        return None
+
+    def _consume_unknown_block(self, first_lineno, first_tok):
+        parts = [str(first_tok)]
+
+        while self._peek() and self._peek()[0] == first_lineno:
+            parts.append(str(self._next()[1]))
+
+        while self._peek():
+            lineno, tok = self._peek()
+            if self._is_top_level_kw_token(tok):
+                break
+            parts.append(str(self._next()[1]))
+
+        next_kw = self._peek_next_top_level_kw()
+        reason = "unknown top-level keyword"
+        if next_kw:
+            reason += f"; stopped before {next_kw[1]}"
+        self._record_unparsed(first_lineno, " ".join(parts), reason=reason)
+        return parts
+
+    def _consume_unknown_inline(self, lineno, first_tok):
+        parts = [str(first_tok)]
+        while self._peek() and self._peek()[0] == lineno:
+            parts.append(str(self._next()[1]))
+        self._record_unparsed(lineno, " ".join(parts), reason="unknown inline token")
+        return parts
+
     def _expand_int_token(self, tok):
         text = str(tok).strip()
         if not text:
@@ -209,6 +264,11 @@ class CMGParser:
                 'alter_schedule': [],
                 'geofac': None, 'wfrac': None, 'skin': None,
             }
+            if self.default_geometry:
+                well['well_radius'] = self.default_geometry.get('well_radius')
+                well['geofac'] = self.default_geometry.get('geofac')
+                well['wfrac'] = self.default_geometry.get('wfrac')
+                well['skin'] = self.default_geometry.get('skin')
             R['wells'].append(well)
         elif well_name and (not well.get('well_name') or str(well.get('well_name', '')).startswith('W')):
             well['well_name'] = well_name
@@ -250,7 +310,7 @@ class CMGParser:
         return vals
 
     def _peek_modifier(self):
-        """查看下一个token是否是 *CON/*KVAR/*IVAR/*JVAR/*ALL/*IJK 修饰词"""
+        """?????token??? *CON/*KVAR/*IVAR/*JVAR/*ALL/*IJK ???"""
         t = self._peek()
         if not t:
             return None
@@ -259,7 +319,49 @@ class CMGParser:
             return tok.upper()
         return None
 
-    # ── 通用 handler：array（带修饰词）────────────────────────────────────────
+    def _infer_equalsi_source_key(self, section, key):
+        key = str(key or "")
+        if key.endswith("_j") or key.endswith("_k"):
+            return key[:-1] + "i"
+        return None
+
+    def _peek_equalsi_relation(self, section, key, unit, src):
+        t = self._peek()
+        if not t or str(t[1]).upper() != "*EQUALSI":
+            return None
+
+        source_key = self._infer_equalsi_source_key(section, key)
+        if not source_key:
+            return None
+
+        self.pos += 1
+        same_line_tokens = self._read_same_line_tokens(self._last_lineno())
+        scale = 1.0
+        for tok in same_line_tokens:
+            if str(tok).strip() == "*":
+                continue
+            try:
+                scale = _to_float(tok)
+                break
+            except ValueError:
+                continue
+
+        return {
+            "type": "reference",
+            "relation": "EQUALSI",
+            "source_section": section,
+            "source_key": source_key,
+            "scale": float(scale),
+            "unit": unit,
+            "confidence": 0.99,
+            "source": src,
+            "source_format_hint": {
+                "software": "cmg_imex",
+                "keyword": "*EQUALSI",
+            },
+        }
+
+    # ?? ?? handler?array??????????????????????????????????????????????
 
     def _handle_array(self, entry, R):
         json_spec = entry["json"]
@@ -268,6 +370,11 @@ class CMGParser:
         src = f"{json_spec['section']} {json_spec['key']} 第{lineno}行"
         section = json_spec["section"]
         key = json_spec["key"]
+
+        relation = self._peek_equalsi_relation(section, key, unit, src)
+        if relation is not None:
+            R[section][key] = relation
+            return
 
         mod = self._peek_modifier()
         if mod:
@@ -395,26 +502,29 @@ class CMGParser:
         ncols = len(columns)
         src = f"rockfluid {json_spec['key']}"
 
-        nums = []
-        while self._peek():
-            _, tok = self._peek()
-            if _is_kw(tok):
-                break
-            self.pos += 1
-            expanded = _expand_repeat(tok)
-            if expanded:
-                nums.extend(expanded)
-                continue
-            try:
-                nums.append(_to_float(tok))
-            except ValueError:
-                pass
-
         rows = []
-        i = 0
-        while i + ncols - 1 < len(nums):
-            rows.append(nums[i:i + ncols])
-            i += ncols
+        while self._peek():
+            lineno, tok = self._peek()
+            if self._is_top_level_kw_token(tok):
+                break
+
+            row_tokens = self._read_same_line_tokens(lineno)
+            nums = []
+            for item in row_tokens:
+                expanded = _expand_repeat(item)
+                if expanded is not None:
+                    nums.extend(expanded)
+                    continue
+                try:
+                    nums.append(_to_float(item))
+                except ValueError:
+                    pass
+
+            if len(nums) == ncols - 1 and ncols >= 4:
+                nums.append(0.0)
+
+            if len(nums) >= ncols:
+                rows.append(nums[:ncols])
         if rows:
             R[json_spec["section"]][json_spec["key"]] = _table(columns, rows, src)
 
@@ -706,7 +816,7 @@ class CMGParser:
         self._parse_perf(R, in_run_section, '*PERFV')
 
     def _parse_geometry(self, R, in_run_section):
-        if not in_run_section or not R['wells']:
+        if not in_run_section:
             return
 
         lineno = self._last_lineno()
@@ -727,6 +837,7 @@ class CMGParser:
                 'skin': nums[3] if len(nums) > 3 else None,
             }
             self.last_geometry = geom
+            self.default_geometry = geom
             for w in self._wells_for_selector(R):
                 w['well_radius'] = geom['well_radius']
                 if geom['geofac'] is not None:
@@ -769,6 +880,76 @@ class CMGParser:
                 'time': R.get('_current_time', 0.0),
                 'rate': new_rate,
             })
+
+    def _parse_well_status_action(self, R, in_run_section, action):
+        if not in_run_section or not R['wells']:
+            return
+
+        lineno = self._last_lineno()
+        tokens = self._read_same_line_tokens(lineno)
+        selector = []
+        for tok in tokens:
+            expanded = self._expand_int_token(tok)
+            if expanded:
+                selector = expanded
+                break
+
+        for well in self._wells_for_selector(R, selector):
+            well.setdefault('status_schedule', []).append({
+                'time': R.get('_current_time', 0.0),
+                'action': action,
+            })
+
+    def _parse_open(self, R, in_run_section):
+        self._parse_well_status_action(R, in_run_section, 'OPEN')
+
+    def _parse_shutin(self, R, in_run_section):
+        self._parse_well_status_action(R, in_run_section, 'SHUTIN')
+
+    def _parse_control_directive(self, R, in_run_section=None):
+        lineno = self._last_lineno()
+        keyword = self.tokens[self.pos - 1][1].upper() if self.pos > 0 else ""
+        tokens = self._read_same_line_tokens(lineno)
+        bucket = R.setdefault("numerical", {}).setdefault("_cmg_control_directives", [])
+        bucket.append({
+            "keyword": keyword,
+            "line": lineno,
+            "tokens": [str(t) for t in tokens],
+            "time": R.get("_current_time", 0.0),
+        })
+
+    def _parse_solver_directive(self, R, in_run_section=None):
+        lineno = self._last_lineno()
+        keyword = self.tokens[self.pos - 1][1].upper() if self.pos > 0 else ""
+        tokens = self._read_same_line_tokens(lineno)
+        bucket = R.setdefault("numerical", {}).setdefault("_cmg_solver_directives", [])
+        bucket.append({
+            "keyword": keyword,
+            "line": lineno,
+            "tokens": [str(t) for t in tokens],
+            "time": R.get("_current_time", 0.0),
+        })
+
+    def _parse_equalsi(self, R):
+        lineno = self._last_lineno()
+        tokens = self._read_same_line_tokens(lineno)
+        bucket = R.setdefault("reservoir", {}).setdefault("_cmg_equalities", [])
+        bucket.append({
+            "keyword": "*EQUALSI",
+            "line": lineno,
+            "tokens": [str(t) for t in tokens],
+        })
+
+    def _parse_grid_directive(self, R):
+        lineno = self._last_lineno()
+        keyword = self.tokens[self.pos - 1][1].upper() if self.pos > 0 else ""
+        tokens = self._read_same_line_tokens(lineno)
+        bucket = R.setdefault("grid", {}).setdefault("_cmg_grid_directives", [])
+        bucket.append({
+            "keyword": keyword,
+            "line": lineno,
+            "tokens": [str(t) for t in tokens],
+        })
 
     def _parse_time(self, R, in_run_section):
         if not in_run_section:
@@ -827,6 +1008,48 @@ class CMGParser:
             R["fluid"]["model"] = model
             if model.startswith("MIS"):
                 R["meta"]["model_type"] = "miscible"
+
+    def _parse_gravity(self, R):
+        t = self._peek()
+        if not t or not _is_kw(t[1]):
+            return
+        _, dtype = self._next()
+        dtype_u = dtype.lstrip("*").upper()
+        t = self._peek()
+        if not t or _is_kw(t[1]):
+            return
+        try:
+            val = _to_float(t[1])
+            self.pos += 1
+        except ValueError:
+            return
+        R.setdefault("fluid", {})[f"{dtype_u.lower()}_gravity"] = _scalar(val, "", f"fluid *GRAVITY *{dtype_u}")
+
+    def _parse_zg(self, R):
+        rows = []
+        while self._peek():
+            lineno, tok = self._peek()
+            if self._is_top_level_kw_token(tok):
+                break
+            row_tokens = self._read_same_line_tokens(lineno)
+            nums = []
+            for item in row_tokens:
+                expanded = _expand_repeat(item)
+                if expanded is not None:
+                    nums.extend(expanded)
+                    continue
+                try:
+                    nums.append(_to_float(item))
+                except ValueError:
+                    pass
+            if len(nums) >= 6:
+                rows.append(nums[:6])
+        if rows:
+            R.setdefault("fluid", {})["zg_table"] = _table(
+                ["p", "c1", "c2", "c3", "c4", "c5"],
+                rows,
+                "fluid *ZG",
+            )
 
     # ── 主解析流程 ────────────────────────────────────────────────────────────
 
@@ -915,9 +1138,12 @@ class CMGParser:
                     else:
                         handler(R)
             else:
-                # 未注册关键字，记录并保留上下文
-                self._record_unparsed(lineno, tok, reason="unknown keyword")
-                if u not in unknown_keys:
+                if self._is_top_level_kw_token(tok, off=-1):
+                    self._consume_unknown_block(lineno, tok)
+                else:
+                    self._consume_unknown_inline(lineno, tok)
+
+                if _is_kw(tok) and u not in unknown_keys:
                     unknown_keys.append(u)
 
         if unknown_keys:
@@ -925,6 +1151,15 @@ class CMGParser:
 
         if self.unparsed_blocks:
             R["unparsed_blocks"] = self.unparsed_blocks
+
+        if self.raw_lines:
+            R["meta"]["_cmg_roundtrip_mode"] = "source_faithful"
+            R["meta"]["_cmg_raw_deck_lines"] = list(self.raw_lines)
+            R["meta"]["_cmg_source_dir"] = str(self.filepath.parent)
+            R["meta"]["_cmg_case_dependencies"] = scan_cmg_case_dependencies(
+                self.raw_lines,
+                self.filepath.parent,
+            )
 
         R.pop("_current_time", None)
         return R
@@ -951,6 +1186,7 @@ def parse_cmg(filepath, output_json=None, report_dir="outputs/reports/parsers"):
         ("PVT 行数", len(r.get("fluid", {}).get("pvt_table", {}).get("rows", []))),
         ("SWT 行数", len(r.get("rockfluid", {}).get("swt_table", {}).get("rows", []))),
         ("未知关键字数", len(unknown)),
+        ("运行依赖文件", len((r.get("meta", {}).get("_cmg_case_dependencies", {}) or {}).get("runtime_inputs", []))),
     ]
 
     md_path, json_path = write_report_bundle(
@@ -966,6 +1202,7 @@ def parse_cmg(filepath, output_json=None, report_dir="outputs/reports/parsers"):
             "start_date": r.get("meta", {}).get("start_date"),
             "unit_system": r.get("meta", {}).get("unit_system"),
             "kdir": r.get("grid", {}).get("kdir"),
+            "case_dependencies": r.get("meta", {}).get("_cmg_case_dependencies", {}),
         },
     )
     r["_parse_report"] = {"md": str(md_path), "json": str(json_path)}

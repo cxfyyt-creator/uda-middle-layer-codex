@@ -135,17 +135,22 @@ def _check_blackoil_fluid(data: Dict[str, Any], blockers: List[str], warnings: L
 
     if not (
         _has_value(fluid.get("pvt_table"))
+        or _has_value(fluid.get("zg_table"))
         or (_has_value(fluid.get("pvto_table")) and _has_value(fluid.get("pvdg_table")))
     ):
-        blockers.append("blackoil fluid requires pvt_table or pvto_table+pvdg_table")
+        blockers.append("blackoil fluid requires pvt_table or zg_table or pvto_table+pvdg_table")
 
-    missing_densities = [k for k in ("oil_density", "gas_density", "water_density") if not _has_value(fluid.get(k))]
+    missing_densities = [k for k in ("oil_density", "water_density") if not _has_value(fluid.get(k))]
+    if not (_has_value(fluid.get("gas_density")) or _has_value(fluid.get("gas_gravity"))):
+        missing_densities.append("gas_density_or_gravity")
     if missing_densities:
         blockers.append("missing density fields: " + ", ".join(f"fluid.{k}" for k in missing_densities))
     for key in ("oil_density", "gas_density", "water_density"):
         obj = fluid.get(key)
         if _has_value(obj) and float(obj.get("value", 0.0)) <= 0:
             blockers.append(f"fluid.{key} must be positive")
+    if _has_value(fluid.get("gas_gravity")) and float(fluid["gas_gravity"].get("value", 0.0)) <= 0:
+        blockers.append("fluid.gas_gravity must be positive")
 
     if target == "cmg":
         if not (_has_value(rockfluid.get("swt_table")) or _has_value(rockfluid.get("swof_table")) or _has_value(rockfluid.get("swfn_table"))):
@@ -296,6 +301,23 @@ def _check_schedule_support(data: Dict[str, Any], blockers: List[str], warnings:
                 warnings.append(f"timeline_events[{idx}] may not be exported cleanly to Petrel")
 
 
+def _check_case_runtime_dependencies(data: Dict[str, Any], blockers: List[str], warnings: List[str], *, target: str) -> None:
+    if target != "cmg":
+        return
+
+    meta = data.get("meta", {}) or {}
+    deps = meta.get("_cmg_case_dependencies", {}) or {}
+    runtime_inputs = deps.get("runtime_inputs", []) or []
+    missing_runtime_inputs = deps.get("missing_runtime_inputs", []) or []
+
+    if runtime_inputs:
+        warnings.append(f"cmg runtime inputs detected: {len(runtime_inputs)}")
+
+    for item in missing_runtime_inputs:
+        path = item.get("path") or item.get("source_path") or "<unknown>"
+        blockers.append(f"missing required CMG runtime input: {path}")
+
+
 def evaluate_target_preflight(data: Dict[str, Any], *, target: str) -> Dict[str, Any]:
     blockers: List[str] = []
     warnings: List[str] = []
@@ -315,6 +337,7 @@ def evaluate_target_preflight(data: Dict[str, Any], *, target: str) -> Dict[str,
     _check_relperm_tables(data, blockers, warnings)
     _check_wells(data, blockers, warnings)
     _check_schedule_support(data, blockers, warnings, target=target.lower())
+    _check_case_runtime_dependencies(data, blockers, warnings, target=target.lower())
 
     if model.startswith("MIS"):
         if target.lower() == "petrel":

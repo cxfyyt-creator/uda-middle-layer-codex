@@ -1,0 +1,347 @@
+   ******************************************************************************
+   ** mxcmb002.dat:        IMEX Combinative Template No. 02                    **
+   ******************************************************************************
+   **************************************************************************************
+   **                                                                                  **
+   ** FILE:   MXCMB002.DAT                                                             **
+   **                                                                                  **
+   ** MODEL:  53x53x1                                                  WATER INJECTION **
+   **                                                                                  **
+   **************************************************************************************
+   **                                                                                  **
+   ** This is a 53x53x3 cartesian grid of a single pattern 5-spot water injection      **
+   ** problem. The water injector is located in centre block (27,27,1), and the        **
+   ** producers in the corner blocks.                                                  **
+   ** This data set illustrates the option *COMBINATIVE with related numerical options.**
+   ** The combinative solver option requires *SOLVER *PARASOL. If *SOLVER *AIMSOL is   **
+   ** used the solver is automatically switched. The keyword *PNTHRDS 1 is present to  **
+   ** override the default number of threads for PARASOL. To run with defult number of **
+   ** PARASOL threads it needs to be specified, i.e. "-parasol 2".                     **
+   **                                                                                  **
+   **************************************************************************************
+   ** CONTACT:    CMG,   (403)531-1300;   282-6495 (fax);support@cmgl.ca    (Internet) **
+   **************************************************************************************
+
+RESULTS SIMULATOR IMEX
+
+   ********************************************************************************
+   ** I/O Control Section                                                        **
+   ********************************************************************************
+
+   *TITLE1
+   'IMEX Combinative Template No. 02'
+   *TITLE2
+   'Test/Illustrate Numerical Option *COMBINATIVE'
+   *TITLE3
+   'Single 5-spot pattern waterflood'
+  
+ INUNIT *SI
+ OUTUNIT *SI
+   
+ **turn off output (except for well output to sr2)
+ OUTPRN RES NONE
+ OUTPRN TABLES NONE
+ WPRN WELL 0
+ WPRN GRID 0
+ WPRN SECTOR 0
+ WSRF WELL 1
+ WSRF GRID NEVER
+ OUTSRF GRID NONE
+ OUTSRF RES NONE
+ WSRF SECTOR TIME
+   
+ WPRN ITER BRIEF **MATRIX
+   
+ **DEBUG CPUTIME SOLVER
+ **DEBUG LSOLVER    
+ 
+ ** (53+(52*0)) X (53+(52*0)) X 1 = 53 X 53 x 1 = 2809 blocks
+ GRID VARI         53         53          1
+ KDIR DOWN
+ DI CON    15.000
+ DJ CON    15.000
+ DK CON     50.0000
+ DTOP
+       2809*1000.
+ NULL CON 1.
+ PINCHOUTARRAY CON 1.
+ POR CON 0.15
+ PERMI CON 100.
+ PERMJ CON 100.
+ PERMK CON 10.
+ CPOR  MATRIX   1.5E-07
+ PRPOR MATRIX   3.E+04 
+
+** modify corner and side block volumes
+ VOLMOD CON 1.0
+ mod          2:52                  1:1                   1:1          * 0.5
+              2:52                 53:53                  1:1          * 0.5
+              1:1                   2:52                  1:1          * 0.5
+             53:53                  2:52                  1:1          * 0.5
+
+              1:1                   1:1                   1:1          * 0.25
+             53:53                 53:53                  1:1          * 0.25
+             53:53                  1:1                   1:1          * 0.25
+              1:1                  53:53                  1:1          * 0.25
+
+** modify all edge transmissibilities
+ TRANSI CON 1.0
+ mod          1:53                  1:1                   1:1          * 0.5
+              1:53                 53:53                  1:1          * 0.5
+
+ TRANSJ CON 1.0
+ mod          1:1                   1:53                  1:1          * 0.5
+             53:53                  1:53                  1:1          * 0.5
+
+ TRANSK CON 1.0
+ mod          1:1                   1:1                   1:1          * 0.25
+             53:53                 53:53                  1:1          * 0.25
+              1:1                  53:53                  1:1          * 0.25
+             53:53                  1:1                   1:1          * 0.25
+              2:52                  1:1                   1:1          * 0.5
+              2:52                 53:53                  1:1          * 0.5
+              1:1                   2:52                  1:1          * 0.5
+             53:53                  2:52                  1:1          * 0.5
+
+ MODEL *BLACKOIL
+ **$ OilGas Table 'Table A'
+ TRES     60.
+ PVT *EG 1
+ **  P        Rs       Bo       EG       VisO     VisG
+  101.33       0.71    1.0364  0.871505  5.673   0.011412
+  1761.24      7.43    1.0513  15.73017  4.2675  0.011704
+  3421.15      15.67   1.0703  31.7557   3.2897  0.01211
+  5081.06      24.75   1.0919  49.0205   2.6404  0.01259
+  6740.97      34.44   1.1158  67.5237   2.1919  0.013135
+  8400.88      44.63   1.1416  87.132    1.8684  0.013743
+  1.00608E+04  55.24   1.1692  107.5276  1.626   0.014414
+  1.17207E+04  66.2    1.1985  128.2087  1.4387  0.01515 
+  1.338062E+04 77.48   1.2293  148.582   1.29    0.015953
+  1.504053E+04 89.05   1.2616  168.1063  1.1694  0.016828
+  1.670044E+04 100.89  1.2952  186.4024  1.0699  0.017779
+  1.836035E+04 112.96  1.3301  203.276   0.9863  0.018811
+  2.002027E+04 125.25  1.3663  218.6816  0.9153  0.01993 
+  2.16802E+04  137.76  1.4037  232.671   0.8541  0.021142
+  2.33401E+04  150.46  1.4422  245.35    0.801   0.022455
+  2.5E+04      163.35  1.4819  256.846   0.7544  0.023876
+  3.2E+04      219.52  1.6605  295.177   0.6081  0.031281
+  3.9E+04      278.28  1.8561  322.497   0.5119  0.041647
+  4.6E+04      339.24  2.067   343.317   0.4437  0.056222
+  5.3E+04      402.12  2.2919  360.028   0.3929  0.076834
+  6.E+04       466.73  2.5299  373.9594  0.3534  0.106168
+ DENSITY OIL 880.
+ DENSITY GAS 0.97776
+ DENSITY WATER 995.856
+ CO       1.985708E-06
+ CVO      0
+ *BWI      1.003712
+ *CW       4.03771E-07
+ REFPW    3.E+04
+ VWI      0.507059
+ CVW      0
+
+ ROCKFLUID
+ RPT 1
+ SWT
+ 0.200000  0.000000      1.000000    0.000000
+ 0.234375  0.0009765625  0.87890625  0.000000
+ 0.268750  0.00390625    0.765625    0.000000
+ 0.303125  0.0087890625  0.66015625  0.000000
+ 0.337500  0.015625      0.562500    0.000000
+ 0.371875  0.0244140625  0.47265625  0.000000
+ 0.406250  0.03515625    0.390625    0.000000
+ 0.440625  0.0478515625  0.31640625  0.000000
+ 0.475000  0.062500      0.250000    0.000000
+ 0.509375  0.0791015625  0.19140625  0.000000
+ 0.543750  0.09765625    0.140625    0.000000
+ 0.578125  0.1181640625  0.09765625  0.000000
+ 0.612500  0.140625      0.062500    0.000000
+ 0.646875  0.1650390625  0.03515625  0.000000
+ 0.681250  0.19140625    0.015625    0.000000
+ 0.715625  0.2197265625  0.00390625  0.000000
+ 0.750000  0.250000      0.000000    0.000000
+  
+ *SLT
+ 0.450000  1.000000   0.000000   0.000000 
+ 0.481250  0.8789063  0.0039062  0.000000
+ 0.512500  0.765625   0.015625   0.000000
+ 0.543750  0.6601563  0.0351563  0.000000
+ 0.575000  0.562500   0.062500   0.000000 
+ 0.606250  0.4726563  0.0976563  0.000000 
+ 0.637500  0.390625   0.140625   0.000000
+ 0.668750  0.3164063  0.1914063  0.000000
+ 0.700000  0.250000   0.250000   0.000000
+ 0.731250  0.1914063  0.3164063  0.000000
+ 0.762500  0.140625   0.390625   0.000000
+ 0.793750  0.0976563  0.4726563  0.000000
+ 0.825000  0.062500   0.562500   0.000000
+ 0.856250  0.0351563  0.6601563  0.000000
+ 0.887500  0.015625   0.765625   0.000000
+ 0.918750  0.0039063  0.8789063  0.000000
+ 0.975000  0.000000   1.000000   0.000000
+  
+ KROIL STONE2 SWSG
+  
+ INITIAL
+ VERTICAL BLOCK_CENTER WATER_OIL_GAS
+ GASZONE NOOIL
+ REFDEPTH 1000.
+ REFPRES 3.E+04
+ DWOC 1049.
+ DGOC 800.
+ PB CON 2.5E+04
+
+ RESULTS SECTION NUMERICAL
+ NUMERICAL
+ DTMAX 30.0 
+ MAXSTEPS 3000
+ PRECC 1.E-8
+ NORM SATUR 0.10
+ ITERMAX 150 **300 **120
+ NORTH   150 **300 **110 **(default is 30) **60
+ CONVERGE MAXRES 1.0
+  **SORDER *NATURAL            ** Natural or Red-Black (default) ordering
+   *SOLVER *PARASOL
+   *PNTHRDS  1
+   **************
+   **COMBINATIVE OPTIONS
+   **************
+   *COMBINATIVE ON
+   *AMG-SETUP-FREQ TIMESTEP
+   *AMG-SMOOTHER JACOBI
+   *AMG-COARSEN AGGRESSIVE 
+
+ RUN
+ DATE 2002 03 31.
+ DTWELL 0.50
+  
+**AIMSET CON 1
+ WELL           1 VERT          1          1
+ WELL           2 VERT         53          1
+ WELL           3 VERT          1         53
+ WELL           4 VERT         53         53
+
+ PRODUCER          1:4         
+ OPERATE MAX STO  100. CONT
+ OPERATE MIN BHP  5000. CONT
+ GEOMETRY K 0.0762 0.37 1. 0.
+ PERFV GEOA          1:4         
+          1:1          1.00
+
+ WELL           5 VERT         27         27
+
+ INJECTOR MOBWEIGHT          5:5         
+ INCOMP WATER
+ OPERATE MAX STW  100. CONT
+ GEOMETRY K 0.0762 0.37 1. 0.
+ PERFV GEOA          5:5         
+          1:1          1.00
+
+ ALTER          1
+  25.0
+ PERFV GEOA          1
+          1:1          0.25
+ ALTER          2
+  25.0
+ PERFV GEOA          2
+          1:1          0.25
+ ALTER          3
+  25.0
+ PERFV GEOA          3
+          1:1          0.25
+ ALTER          4
+  25.0
+ PERFV GEOA          4
+          1:1          0.25
+
+ DATE 2002 05 31.    
+ DATE 2002 07 31.    
+ DATE 2002 09 30.    
+ DATE 2002 11 30.    
+ DATE 2003 01 31.    
+ DATE 2003 03 31.    
+ DATE 2003 05 31.    
+ DATE 2003 07 31.    
+ DATE 2003 09 30.    
+ DATE 2003 11 30.    
+ DATE 2004 01 31.    
+ DATE 2004 03 31.    
+ DATE 2004 05 31.    
+ DATE 2004 07 31.    
+ DATE 2004 09 30.    
+ DATE 2004 11 30.    
+ DATE 2005 01 31.    
+ DATE 2005 03 31.    
+ DATE 2005 05 31.    
+ DATE 2005 07 31.    
+ DATE 2005 09 30.    
+ DATE 2005 11 30.    
+ DATE 2006 01 31.    
+ DATE 2006 03 31.    
+ DATE 2006 05 31.    
+ DATE 2006 07 31.    
+ DATE 2006 09 30.    
+ DATE 2006 11 30.    
+ DATE 2007 01 31.    
+ DATE 2007 03 31.    
+ DATE 2007 05 31.    
+ DATE 2007 07 31.    
+ DATE 2007 09 30.    
+ DATE 2007 11 30.    
+ DATE 2008 01 31.    
+ DATE 2008 03 31.    
+ DATE 2008 05 31.    
+ DATE 2008 07 31.    
+ DATE 2008 09 30.    
+ DATE 2008 11 30.    
+ DATE 2009 01 31.    
+ DATE 2009 03 31.    
+ DATE 2009 05 31.    
+ DATE 2009 07 31.    
+ DATE 2009 09 30.    
+ DATE 2009 11 30.    
+ DATE 2010 01 31.    
+ DATE 2010 03 31.    
+ DATE 2010 05 31.    
+ DATE 2010 07 31.    
+ DATE 2010 09 30.    
+ DATE 2010 11 30.    
+ DATE 2011 01 31.    
+ DATE 2011 03 31.    
+ DATE 2011 05 31.    
+ DATE 2011 07 31.    
+ DATE 2011 09 30.    
+ DATE 2011 11 30.    
+ DATE 2012 01 31.    
+ DATE 2012 03 31.    
+ DATE 2012 05 31.    
+ DATE 2012 07 31.    
+ DATE 2012 09 30.    
+ DATE 2012 11 30.    
+ DATE 2013 01 31.    
+ DATE 2013 03 31.    
+ DATE 2013 05 31.    
+ DATE 2013 07 31.    
+ DATE 2013 09 30.    
+ DATE 2013 11 30.    
+ DATE 2014 01 31.    
+ DATE 2014 03 31.    
+ DATE 2014 05 31.    
+ DATE 2014 07 31.    
+ DATE 2014 09 30.    
+ DATE 2014 11 30.    
+ DATE 2015 01 31.    
+ DATE 2015 03 31.    
+ DATE 2015 05 31.    
+ DATE 2015 07 31.    
+ DATE 2015 09 30.    
+ DATE 2015 11 30.    
+ DATE 2016 01 31.    
+ DATE 2016 03 31.    
+ DATE 2016 05 31.    
+ DATE 2016 07 31.    
+ DATE 2016 09 30.    
+ DATE 2016 11 30.    
+ DATE 2017 01 31.    
+ DATE 2017 03 31.    
+ STOP                

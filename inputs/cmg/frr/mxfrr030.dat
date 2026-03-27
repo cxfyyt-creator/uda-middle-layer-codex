@@ -1,0 +1,1297 @@
+** *******************************************************************************
+** mxfrr030.dat:      PLANAR Fractures with Local Grid Refinement               **
+** *******************************************************************************
+** ************************************************************************************
+**                                                                                   **
+** FILE:                 mxfrr030.dat                                                **
+**                                                                                   **
+** MODEL:  LS-LR-DK MODEL using blockgroups & REFINE INNERWIDTH to create complex    **
+** fractures and *PLNRFRAC_TEMPLATE & *PLNRFRAC to create planar fractures.          **
+** The templates are created on top of the one-level refined grid.                   **
+**                                                                                   **
+** ************************************************************************************
+**                                                                                   **
+** Use of these features greatly simplifies fracture input                           **
+**                                                                                   **
+** ************************************************************************************
+** CONTACT:    CMG,   (403)531-1300;   282-6495 (fax);support@cmgl.ca    (Internet)  **
+** ************************************************************************************
+RESULTS SIMULATOR IMEX 202110
+
+INUNIT SI
+WSRF WELL 1
+WSRF GRID TIME
+WSRF SECTOR TIME
+OUTSRF WELL LAYER NONE
+OUTSRF RES NONE
+OUTSRF GRID ALL
+
+** ***************************************************************************
+** Definition of fundamental cartesian grid
+** ***************************************************************************
+GRID VARI 93 55 3
+KDIR DOWN
+DI IVAR 
+93*25.0
+DJ JVAR 
+55*25.0
+DK KVAR
+3*100.0
+DTOP
+5115*3380
+
+DUALPERM 
+SHAPE GK  
+
+*BLOCKGROUP 'Well-1 - SRV 3_1' 
+*IJK 31     20    1    1 
+31:32  21    1    1 
+39     21    1    1 
+36:39  22    1    1 
+31    23:24  1    1 
+36     23    1    1 
+33     26    1:3  1 
+28     28    1    1 
+32     28    1    1 
+35:37  28    1    1 
+27:28  29    1    1 
+34:35  29    1    1 
+29    31:32  1    1 
+31    31     1:2  1 
+31:34  33    1    1 
+34    34:35  1    1 
+31:32  40    1    1 
+28:29  42    1    1 
+32     21    2    1 
+31:36  22    2    1 
+31:33  23    2    1 
+37     28    2    1 
+35     29    2:3  1 
+30     30    2:3  1 
+29     31    2    1 
+30:31  32    2    1 
+33    32:33  2    1 
+31     33    2    1 
+33:34  35    2    1 
+31     40    2    1 
+30:31  41    2    1 
+29:30  42    2    1 
+35    22:23  3    1 
+29     29    3    1 
+30:31  31    3    1 
+31     32    3    1 
+33     32    3    1 
+33     35    3    1 
+*BLOCKGROUP 'Well-1 - SRV 2_1' 
+*IJK 22:25  21    1    1 
+22     22    1    1 
+25     22    1    1 
+24:26  23    1    1 
+22:27  24    1    1 
+22    25:27  1    1 
+24:26  25    1    1 
+24:28  26    1    1 
+24:26  27    1    1 
+28:29  27    1    1 
+23:26  28    1    1 
+20:26  29    1    1 
+22:27  30    1    1 
+23:25  31    1    1 
+27     31    1    1 
+22:26  32    1:2  1 
+28     32    1    1 
+20:28  33    1    1 
+23     34    1    1 
+25     34    1    1 
+22     35    1    1 
+22:23  36    1    1 
+25     36    1    1 
+28     36    1    1 
+28:29  37    1    1 
+22:23  38    1    1 
+25     38    1    1 
+23    39:40  1    1 
+26    40:41  1    1 
+22:23  41    1    1 
+21:22  42    1    1 
+21:24  43    1    1 
+22     44    1    1 
+26:27  23    2    1 
+23     24    2:3  1 
+25:27  24    2    1 
+21:25  25    2    1 
+27     25    2    1 
+22:27  26    2    1 
+22:25  27    2    1 
+22:26  28:29 2    1 
+29:30  29    2    1 
+20:27  30    2    1 
+29     30    2    1 
+22     31    2    1 
+24:26  31    2    1 
+21:25  33    2    1 
+23:25  34    2    1 
+27     34    2    1 
+21:27  35    2    1 
+23:25  36    2    1 
+25     37    2    1 
+21:24  38    2    1 
+22     41    2    1 
+23    43:44  2    1 
+24     22    3    1 
+25:26 23:24  3    1 
+21    25:26  3    1 
+23:26  26    3    1 
+24:25  27    3    1 
+28     27    3    1 
+22:23  28    3    1 
+27:28  28    3    1 
+21:25  29    3    1 
+30     29    3    1 
+24:26  30    3    1 
+22:27  31    3    1 
+21     32    3    1 
+23:27  32    3    1 
+21:24  33    3    1 
+26:27  33    3    1 
+20:24  34    3    1 
+27:28  34    3    1 
+22:23  35    3    1 
+25     35    3    1 
+21:22  36    3    1 
+24     36    3    1 
+23     37    3    1 
+23:24  38    3    1 
+22:25  39    3    1 
+23    40:41  3    1 
+*BLOCKGROUP 'Well-1 - SRV 1_1' 
+*IJK 19    21     1    1 
+7    22:24   1    1 
+17    22     1    1 
+19:20  22    1    1 
+16:18  23    1    1 
+20     23    1    1 
+15:17  24    1    1 
+6:7    25    1    1 
+15     25    1    1 
+17:19  25    1    1 
+7      26    1    1 
+12:14  26    1    1 
+16:19  26    1    1 
+5:8    27    1    1 
+11:19  27    1    1 
+4:5    28    1    1 
+8:10   28    1    1 
+12:20  28    1    1 
+8      29    1    1 
+11:19  29    1    1 
+8:18   30    1    1 
+20    30:31  1    1 
+9      31    1    1 
+11:18  31    1    1 
+10:19  32    1    1 
+12:19  33    1    1 
+12:18  34    1:2  1 
+21     34    1    1 
+8     35:36  1    1 
+12:21  35    1    1 
+13:18  36    1    1 
+21     36    1    1 
+13:16  37    1    1 
+18     37    1    1 
+13:18  38    1:2  1 
+14:17  39    1    1 
+19:20  39    1    1 
+13:16  40    1    1 
+13     41    1    1 
+15     41    1    1 
+20     41    1:2  1 
+15:17  42    1    1 
+19:20  42    1    1 
+14:16  43    1    1 
+8      21    2    1 
+7:11   22    2    1 
+16:17  22    2    1 
+19     22    2    1 
+17:19  23    2    1 
+15:16  24    2    1 
+8      25    2    1 
+12     25    2    1 
+14     25    2    1 
+16:20  25    2    1 
+7:9    26    2    1 
+12:15  26    2    1 
+17     26    2    1 
+12:21  27    2    1 
+4      28    2    1 
+9      28    2    1 
+11:19 28:29  2    1 
+7:9    29    2    1 
+7     30:31  2    1 
+10     30    2    1 
+12:19  30    2    1 
+9:20   31    2    1 
+9      32    2    1 
+11:18 32:33  2    1 
+8      35    2    1 
+12:19  35    2    1 
+11:18  36    2    1 
+12:18  37    2    1 
+12     39    2    1 
+14:20  39    2    1 
+13     40    2    1 
+16:21  40    2    1 
+18     41    2    1 
+15     42    2    1 
+19:21  42    2    1 
+14    43:44  2    1 
+19     43    2    1 
+16     25    3    1 
+18     25    3    1 
+20     25    3    1 
+14:18  28    3    1 
+13:17  29    3    1 
+12:18  30    3    1 
+12     31    3    1 
+15:17  31    3    1 
+19     31    3    1 
+13:17  32    3    1 
+13     33    3    1 
+15:17  33    3    1 
+13:18  34    3    1 
+8:13   35    3    1 
+17     35    3    1 
+14:16  36    3    1 
+15:16  37    3    1 
+18     37    3    1 
+13     38    3    1 
+15     38    3    1 
+17     38    3    1 
+12:13  39    3    1 
+17     40    3    1 
+21     42    3    1 
+**  0 = null block, 1 = active block
+NULL *MATRIX CON           1
+
+mod 1:93  1:13  1:3 = 0
+1:93 49:55  1:3 = 0
+50 31 1 = 0
+50 41 1 = 0
+
+NULL *FRACTURE CON          1
+
+mod 1:93  1:13  1:3  = 0
+1:93 49:55  1:3  = 0
+50 41 1 = 0
+
+** single porosity region (thru planer and complex fractures)
+42:42   1:55 1  = 0
+16:18   1:55 3  = 0
+46:82  27:28 1  = 0
+
+*REFINE *INNERWIDTH 0.6096
+*BG 'Well-1 - SRV 1_1' INTO 5 5 1 K2INT 500 WF2 0.0005
+*REFINE *INNERWIDTH 0.6096
+*BG 'Well-1 - SRV 2_1' INTO 5 5 1 K2INT 500 WF2 0.0005
+*REFINE *INNERWIDTH 0.6096
+*BG 'Well-1 - SRV 3_1' INTO 5 5 1 K2INT 500 WF2 0.0005
+
+** LGR pre-refinement
+** frac 50, 32, 2 and 50, 42, 1 and 
+*BLOCKGROUP 'bg1' *IJK 50 1:48 1:3 1
+50 1:24 1:3 0
+*REFINE *BG 'bg1'  into 4 3 4    
+
+
+** frac 52, 33, 1
+*REFINE 49 33 1:2 into 4 3 4
+*REFINE 4 3 4
+*RANGE  51:55 33 1:2
+
+** frac 64,32,2
+*SBLOCKGROUP 'sbg1'  1 13 3
+64 26:38 1:3
+*END_SBLOCKGROUP
+*REFINE *SBG 'sbg1' into 4 3 4
+
+*** SBG for USE_SBG
+*SBLOCKGROUP 'frac3' 4 39 12
+64 26:38 1:3 / 1:4 1:3 1:4
+*END_SBLOCKGROUP
+
+*SBLOCKGROUP 'frac2' 28 1 8
+49:55 33 1:2 / 1:4 1 1:4
+*END_SBLOCKGROUP
+
+*SBLOCKGROUP 'frac1' 4 72 12
+50 25:48 1:3 / 1:4 1:3 1:4
+*END_SBLOCKGROUP
+
+
+POR *MATRIX CON         0.03
+*MOD 50 40 1	= 0
+50 30 1 = 0
+POR *FRACTURE CON       8E-005
+PERMI *MATRIX CON       0.0001
+PERMI *FRACTURE CON       4E-005
+
+PERMJ *MATRIX CON       0.0001
+PERMJ *FRACTURE CON       4E-005
+
+PERMK *MATRIX CON       0.0001
+PERMK *FRACTURE CON       4E-005
+
+DJFRAC CON           10
+DIFRAC CON           10
+DKFRAC CON            0
+**  0 = pinched block, 1 = active block
+PINCHOUTARRAY CON            1
+PRPOR FRACTURE 35000
+PRPOR MATRIX 35000
+CPOR FRACTURE 4e-6
+CPOR MATRIX 4e-6
+** Please don't remove these RESULTS PLNRTEMPLATE keywords.
+RESULTS PLNRTEMPLATE NAME 'Template_JDIR'
+RESULTS PLNRTEMPLATE PRIMFRACWIDTH 0.0005
+RESULTS PLNRTEMPLATE PRIMFRACPERM 500
+RESULTS PLNRTEMPLATE END
+
+*PLNRFRAC_TEMPLATE 'Template_JDIR'
+*PLNR_REFINE *INTO  5 5 1
+*BWHLEN 140
+*JDIR
+*INNERWIDTH 0.6096
+*HeightUP 160.
+*HeightDOWN 29.
+*K2INT 500
+*WF2 0.0005
+*PERMI MATRIX *FZ 39.3701 20.0
+*PERMJ MATRIX *FZ 39.3701 20.0
+*PERMK MATRIX *FZ 39.3701 20.0
+*POR_NULL *MATRIX 0.18
+*AIMSET MATRIX *FZ 1
+*END_TEMPLATE
+
+RESULTS PLNRSTAGE NAME 'Planar Stage 1'
+RESULTS PLNRSTAGE WELL 'Well-1'
+RESULTS PLNRSTAGE DATE 2014-01-01
+RESULTS PLNRSTAGE BASENAME 'Well-1 - Frac'
+RESULTS PLNRSTAGE FRACS 'Well-1 - Frac_1' 'Well-1 - Frac_3' 'Well-1 - Frac_5' 
+RESULTS PLNRSTAGE SLABS '50 64 80'
+RESULTS PLNRSTAGE PERFOPTION 0
+RESULTS PLNRSTAGE LAYERMIN 1
+RESULTS PLNRSTAGE LAYERMAX 3
+RESULTS PLNRSTAGE END
+
+*PLNR_REFINE 52,33,1 / 1 1 2 *INTO  5 5 1 *USE_SBG 'frac2'
+*BWHLEN 140 95
+*IDIR
+*INNERWIDTH 0.6096
+*LayersUP 1
+*LayersDOWN 2
+*K2INT 500
+*WF2 0.0005
+*BG_NAME 'Well-testi'
+*PLNRFRAC 'Template_JDIR' 50,32,2 / 2 1 3 *USE_SBG 'frac1' *BG_NAME 'Well-1 - Frac_1'
+*PLNRFRAC 'Template_JDIR' 64,32,2 / 2,1,3 *BG_NAME 'Well-1 - Frac_3' *USE_SBG 'frac3'
+*PLNRFRAC 'Template_JDIR' 80,32,2  *BG_NAME 'Well-1 - Frac_5'
+
+
+*PERMI MATRIX *BG 'Well-testi' *FZ 39.3701 20.0
+
+
+*HF_IN_NULL *ON
+RESULTS CMPLXSTAGE NAME 'Well-1 - SRV 1_1' 
+RESULTS CMPLXSTAGE WELL 'Well-1'
+RESULTS CMPLXSTAGE DATE 2014-01-01
+RESULTS CMPLXSTAGE FRACNAME 'Well-1 - SRV 1_1' 
+RESULTS CMPLXSTAGE LAYERSUP 0
+RESULTS CMPLXSTAGE LAYERSDOWN 0
+RESULTS CMPLXSTAGE END
+** Please don't remove these RESULTS CMPLXFRACTURE keywords.
+RESULTS CMPLXFRACTURE NAME 'Well-1 - SRV 1_1' 
+RESULTS CMPLXFRACTURE TEMPLATENAME 'Complex Template'
+RESULTS CMPLXFRACTURE PRIMFRACWIDTH 0.0005
+RESULTS CMPLXFRACTURE PRIMFRACPERM 500
+RESULTS CMPLXFRACTURE END
+
+RESULTS CMPLXSTAGE NAME 'Well-1 - SRV 2_1' 
+RESULTS CMPLXSTAGE WELL 'Well-1'
+RESULTS CMPLXSTAGE DATE 2014-01-01
+RESULTS CMPLXSTAGE FRACNAME 'Well-1 - SRV 2_1' 
+RESULTS CMPLXSTAGE LAYERSUP 0
+RESULTS CMPLXSTAGE LAYERSDOWN 0
+RESULTS CMPLXSTAGE END
+** Please don't remove these RESULTS CMPLXFRACTURE keywords.
+RESULTS CMPLXFRACTURE NAME 'Well-1 - SRV 2_1' 
+RESULTS CMPLXFRACTURE TEMPLATENAME 'Complex Template'
+RESULTS CMPLXFRACTURE PRIMFRACWIDTH 0.0005
+RESULTS CMPLXFRACTURE PRIMFRACPERM 500
+RESULTS CMPLXFRACTURE END
+
+RESULTS CMPLXSTAGE NAME 'Well-1 - SRV 3_1' 
+RESULTS CMPLXSTAGE WELL 'Well-1'
+RESULTS CMPLXSTAGE DATE 2014-01-01
+RESULTS CMPLXSTAGE FRACNAME 'Well-1 - SRV 3_1' 
+RESULTS CMPLXSTAGE LAYERSUP 0
+RESULTS CMPLXSTAGE LAYERSDOWN 0
+RESULTS CMPLXSTAGE END
+** Please don't remove these RESULTS CMPLXFRACTURE keywords.
+RESULTS CMPLXFRACTURE NAME 'Well-1 - SRV 3_1' 
+RESULTS CMPLXFRACTURE TEMPLATENAME 'Complex Template'
+RESULTS CMPLXFRACTURE PRIMFRACWIDTH 0.0005
+RESULTS CMPLXFRACTURE PRIMFRACPERM 500
+RESULTS CMPLXFRACTURE END
+
+
+*PERMI MATRIX BG 'Well-1 - SRV 1_1' *NFZ 0.0001 
+*PERMI MATRIX BG 'Well-1 - SRV 1_1' *FZ 39.3701 
+*PERMJ MATRIX BG 'Well-1 - SRV 1_1' *NFZ 0.0001 
+*PERMJ MATRIX BG 'Well-1 - SRV 1_1' *FZ 39.3701
+*PERMK MATRIX BG 'Well-1 - SRV 1_1' *NFZ 0.0001 
+*PERMK MATRIX BG 'Well-1 - SRV 1_1' *FZ 39.3701
+*PERMI MATRIX BG 'Well-1 - SRV 2_1' *NFZ 0.0001 
+*PERMI MATRIX BG 'Well-1 - SRV 2_1' *FZ 39.3701
+*PERMJ MATRIX BG 'Well-1 - SRV 2_1' *NFZ 0.0001 
+*PERMJ MATRIX BG 'Well-1 - SRV 2_1' *FZ 39.3701
+*PERMK MATRIX BG 'Well-1 - SRV 2_1' *NFZ 0.0001 
+*PERMK MATRIX BG 'Well-1 - SRV 2_1' *FZ 39.3701
+
+*PERMI MATRIX BG 'Well-1 - SRV 3_1' *NFZ 0.0001 
+*PERMI MATRIX BG 'Well-1 - SRV 3_1' *FZ 39.3701
+*PERMJ MATRIX BG 'Well-1 - SRV 3_1' *NFZ 0.0001 
+*PERMJ MATRIX BG 'Well-1 - SRV 3_1' *FZ 39.3701
+*PERMK MATRIX BG 'Well-1 - SRV 3_1' *NFZ 0.0001 
+*PERMK MATRIX BG 'Well-1 - SRV 3_1' *FZ 39.3701
+
+MODEL GASWATER 
+TRES 80
+PVTG EG 1
+**         p        Eg       visg
+101.325  0.821624  0.0125953
+3094.57   26.3549  0.0130904
+6087.82    54.305  0.0139008
+9081.06    84.276  0.0149916
+12074.3   115.254  0.0163516
+15067.6   145.761  0.0179357
+18060.8   174.408  0.0196668
+21054   200.372  0.0214634
+24047.3   223.423  0.0232609
+27040.5   243.701  0.0250168
+30033.8   261.513  0.0267074
+33027   277.206  0.0283219
+36020.3   291.107  0.0298576
+39013.5   303.504  0.0313168
+42006.8   314.639  0.0327039
+45000   324.711  0.0340247
+GRAVITY GAS 0.7
+REFPW 101.325
+DENSITY WATER 978.682
+BWI 1.02847
+CW 4.66772e-007
+VWI 0.380232
+CVW 0
+
+ROCKFLUID
+RPT 1
+**        Sw           krw
+SWT
+0.25             0
+0.275             0
+0.3             0
+0.34375  4.27246e-005
+0.3875   0.000483374
+0.43125    0.00199803
+0.475    0.00546875
+0.51875     0.0119419
+0.5625     0.0226052
+0.60625     0.0387723
+0.65     0.0618718
+0.69375     0.0934387
+0.7375      0.135107
+0.78125      0.188605
+0.825      0.255748
+0.86875      0.338439
+0.9125      0.438658
+0.95625      0.558467
+1           0.7
+**        Sl           krg
+SLT
+0.25             1
+0.291875       0.79781
+0.33375      0.626655
+0.375625      0.483484
+0.4175      0.365354
+0.459375      0.269435
+0.50125       0.19301
+0.543125      0.133484
+0.585     0.0883883
+0.626875      0.055389
+0.66875     0.0322931
+0.710625     0.0170598
+0.7525     0.0078125
+0.794375    0.00285433
+0.83625   0.000690534
+0.878125  6.10352e-005
+0.92             0
+RPT 2
+**        Sw       krw
+SWT
+0.01         0
+0.071875    0.0625
+0.13375     0.125
+0.195625    0.1875
+0.2575      0.25
+0.319375    0.3125
+0.38125     0.375
+0.443125    0.4375
+0.505       0.5
+0.566875    0.5625
+0.62875     0.625
+0.690625    0.6875
+0.7525      0.75
+0.814375    0.8125
+0.87625     0.875
+0.938125    0.9375
+1         1
+**        Sl       krg
+SLT
+0.01         1
+0.07125    0.9375
+0.1325     0.875
+0.19375    0.8125
+0.255      0.75
+0.31625    0.6875
+0.3775     0.625
+0.43875    0.5625
+0.5       0.5
+0.56125    0.4375
+0.6225     0.375
+0.68375    0.3125
+0.745      0.25
+0.80625    0.1875
+0.8675     0.125
+0.92875    0.0625
+0.99         0
+
+ADGCSTV   CON 0.000508
+ADGMAXV   CON 0.003746
+ROCKDEN   CON 2467 
+
+RTYPE *MATRIX CON            1
+RTYPE *FRACTURE CON            2
+
+RTYPE MATRIX BG 'Well-1 - SRV 1_1' NFZ 1 
+RTYPE MATRIX BG 'Well-1 - SRV 1_1' FZ 2
+RTYPE MATRIX BG 'Well-1 - SRV 2_1' NFZ 1 
+RTYPE MATRIX BG 'Well-1 - SRV 2_1' FZ 2
+RTYPE MATRIX BG 'Well-1 - SRV 3_1' NFZ 1 
+RTYPE MATRIX BG 'Well-1 - SRV 3_1' FZ 2
+
+RTYPE MATRIX BG 'Well-1 - Frac_1' NFZ 1 
+RTYPE MATRIX BG 'Well-1 - Frac_1' FZ 2
+RTYPE MATRIX BG 'Well-1 - Frac_3' NFZ 1 
+RTYPE MATRIX BG 'Well-1 - Frac_3' FZ 2
+RTYPE MATRIX BG 'Well-1 - Frac_5' NFZ 1 
+RTYPE MATRIX BG 'Well-1 - Frac_5' FZ 2
+
+
+NONDARCY GENERAL 0.5
+1.485e9     1.021 0  
+1.485e9     1.021 0  
+
+**ND correction
+**   270.30 = (0.6096/0.0020)**(2-1.021)
+
+NDARCYCOR FRACTURE CON      0
+NDARCYCOR MATRIX   CON      0
+NDARCYCOR MATRIX BG 'Well-1 - SRV 1_1' NFZ 0.0 
+NDARCYCOR MATRIX BG 'Well-1 - SRV 1_1' FZ 270.30
+NDARCYCOR MATRIX BG 'Well-1 - SRV 2_1' NFZ 0.0 
+NDARCYCOR MATRIX BG 'Well-1 - SRV 2_1' FZ 270.30
+NDARCYCOR MATRIX BG 'Well-1 - SRV 3_1' NFZ 0.0 
+NDARCYCOR MATRIX BG 'Well-1 - SRV 3_1' FZ 270.30
+NDARCYCOR MATRIX BG 'Well-1 - Frac_1' NFZ 0.0 
+NDARCYCOR MATRIX BG 'Well-1 - Frac_1' FZ 270.30
+NDARCYCOR MATRIX BG 'Well-1 - Frac_3' NFZ 0.0 
+NDARCYCOR MATRIX BG 'Well-1 - Frac_3' FZ 270.30
+NDARCYCOR MATRIX BG 'Well-1 - Frac_5' NFZ 0.0 
+NDARCYCOR MATRIX BG 'Well-1 - Frac_5' FZ 270.30
+
+INITIAL
+VERTICAL DEPTH_AVE WATER_GAS EQUIL NOTRANZONE
+
+REFDEPTH 3380
+REFPRES 35000
+DWGC 3900
+
+** Set All Grid Values of SWNEQ to "UNDEFINED" (-1) to allow the data set to be
+** read in BUILDER
+
+SWNEQ MATRIX CON -1.0
+SWNEQ FRACTURE CON -1.0
+
+SWNEQ MATRIX BG 'Well-1 - SRV 1_1' FZ 0.25
+SWNEQ MATRIX BG 'Well-1 - SRV 2_1' FZ 0.25
+SWNEQ MATRIX BG 'Well-1 - SRV 3_1' FZ 0.25
+
+SWNEQ MATRIX BG 'Well-1 - Frac_1' FZ 0.25
+SWNEQ MATRIX BG 'Well-1 - Frac_3' FZ 0.25
+SWNEQ MATRIX BG 'Well-1 - Frac_5' FZ 0.25
+
+SWNEQ FRACTURE BG 'Well-1 - SRV 1_1' FZ 0.01
+SWNEQ FRACTURE BG 'Well-1 - SRV 2_1' FZ 0.01
+SWNEQ FRACTURE BG 'Well-1 - SRV 3_1' FZ 0.01
+
+SWNEQ FRACTURE BG 'Well-1 - Frac_1' FZ 0.01
+SWNEQ FRACTURE BG 'Well-1 - Frac_3' FZ 0.01
+SWNEQ FRACTURE BG 'Well-1 - Frac_5' FZ 0.01
+
+
+NUMERICAL
+AUTOTUNE
+**DTMIN 1e-8
+**ITERMAX 200
+**NORTH 200
+**NORM PRESS 1500
+**NORTH 200
+**ITERMAX 200
+
+
+RUN
+DATE 2014 1 1
+DTWELL 1e-004
+**
+WELL  'Well-1'
+PRODUCER 'Well-1'
+OPERATE  MIN  BHP  12000.0  CONT REPEAT
+OPERATE  MAX  STG  1500000.0  CONT REPEAT
+** UBA                    ff   Status  Connection  
+**          rad  geofac  wfrac  skin
+GEOMETRY  I  0.0762  0.37  1.0  0.0
+PERF  GEOA  'Well-1'
+** UBA               ff   Status  Connection  
+11 32 2 / 1 3 1   MT  1.0  OPEN    
+11 32 2 / 2 3 1   MT  1.0  OPEN    
+11 32 2 / 3 3 1   MT  1.0  OPEN    
+11 32 2 / 4 3 1   MT  1.0  OPEN    REFLAYER
+11 32 2 / 5 3 1   MT  1.0  OPEN    
+12 32 2 / 1 3 1   MT  1.0  OPEN    
+12 32 2 / 2 3 1   MT  1.0  OPEN    
+12 32 2 / 3 3 1   MT  1.0  OPEN    
+12 32 2 / 4 3 1   MT  1.0  OPEN    
+12 32 2 / 5 3 1   MT  1.0  OPEN    
+13 32 2 / 1 3 1   MT  1.0  OPEN    
+13 32 2 / 2 3 1   MT  1.0  OPEN    
+13 32 2 / 3 3 1   MT  1.0  OPEN    
+13 32 2 / 4 3 1   MT  1.0  OPEN    
+13 32 2 / 5 3 1   MT  1.0  OPEN    
+14 32 2 / 1 3 1   MT  1.0  OPEN    
+14 32 2 / 2 3 1   MT  1.0  OPEN    
+14 32 2 / 3 3 1   MT  1.0  OPEN    
+14 32 2 / 4 3 1   MT  1.0  OPEN    
+14 32 2 / 5 3 1   MT  1.0  OPEN    
+15 32 2 / 1 3 1   MT  1.0  OPEN    
+15 32 2 / 2 3 1   MT  1.0  OPEN    
+15 32 2 / 3 3 1   MT  1.0  OPEN    
+15 32 2 / 4 3 1   MT  1.0  OPEN    
+15 32 2 / 5 3 1   MT  1.0  OPEN    
+16 32 2 / 1 3 1   MT  1.0  OPEN    
+16 32 2 / 2 3 1   MT  1.0  OPEN    
+16 32 2 / 3 3 1   MT  1.0  OPEN    
+16 32 2 / 4 3 1   MT  1.0  OPEN    
+16 32 2 / 5 3 1   MT  1.0  OPEN    
+17 32 2 / 1 3 1   MT  1.0  OPEN    
+17 32 2 / 2 3 1   MT  1.0  OPEN    
+17 32 2 / 3 3 1   MT  1.0  OPEN    
+17 32 2 / 4 3 1   MT  1.0  OPEN    
+17 32 2 / 5 3 1   MT  1.0  OPEN    
+18 32 2 / 1 3 1   MT  1.0  OPEN    
+18 32 2 / 2 3 1   MT  1.0  OPEN    
+18 32 2 / 3 3 1   MT  1.0  OPEN    
+18 32 2 / 4 3 1   MT  1.0  OPEN    
+18 32 2 / 5 3 1   MT  1.0  OPEN    
+19 32 2           MT  1.0  OPEN    
+20 32 2           MT  1.0  OPEN    
+21 32 2           MT  1.0  OPEN    
+22 32 2 / 1 3 1   MT  1.0  OPEN    
+22 32 2 / 2 3 1   MT  1.0  OPEN    
+22 32 2 / 3 3 1   MT  1.0  OPEN    
+22 32 2 / 4 3 1   MT  1.0  OPEN    
+22 32 2 / 5 3 1   MT  1.0  OPEN    
+23 32 2 / 1 3 1   MT  1.0  OPEN    
+23 32 2 / 2 3 1   MT  1.0  OPEN    
+23 32 2 / 3 3 1   MT  1.0  OPEN    
+23 32 2 / 4 3 1   MT  1.0  OPEN    
+23 32 2 / 5 3 1   MT  1.0  OPEN    
+24 32 2 / 1 3 1   MT  1.0  OPEN    
+24 32 2 / 2 3 1   MT  1.0  OPEN    
+24 32 2 / 3 3 1   MT  1.0  OPEN    
+24 32 2 / 4 3 1   MT  1.0  OPEN    
+24 32 2 / 5 3 1   MT  1.0  OPEN    
+25 32 2 / 1 3 1   MT  1.0  OPEN    
+25 32 2 / 2 3 1   MT  1.0  OPEN    
+25 32 2 / 3 3 1   MT  1.0  OPEN    
+25 32 2 / 4 3 1   MT  1.0  OPEN    
+25 32 2 / 5 3 1   MT  1.0  OPEN    
+26 32 2 / 1 3 1   MT  1.0  OPEN    
+26 32 2 / 2 3 1   MT  1.0  OPEN    
+26 32 2 / 3 3 1   MT  1.0  OPEN    
+26 32 2 / 4 3 1   MT  1.0  OPEN    
+26 32 2 / 5 3 1   MT  1.0  OPEN    
+27 32 2           MT  1.0  OPEN    
+28 32 2           MT  1.0  OPEN    
+29 32 2           MT  1.0  OPEN    
+30 32 2 / 1 3 1   MT  1.0  OPEN    
+30 32 2 / 2 3 1   MT  1.0  OPEN    
+30 32 2 / 3 3 1   MT  1.0  OPEN    
+30 32 2 / 4 3 1   MT  1.0  OPEN    
+30 32 2 / 5 3 1   MT  1.0  OPEN    
+31 32 2 / 1 3 1   MT  1.0  OPEN    
+31 32 2 / 2 3 1   MT  1.0  OPEN    
+31 32 2 / 3 3 1   MT  1.0  OPEN    
+31 32 2 / 4 3 1   MT  1.0  OPEN    
+31 32 2 / 5 3 1   MT  1.0  OPEN    
+32 32 2           MT  1.0  OPEN    
+33 32 2 / 1 3 1   MT  1.0  OPEN    
+33 32 2 / 2 3 1   MT  1.0  OPEN    
+33 32 2 / 3 3 1   MT  1.0  OPEN    
+33 32 2 / 4 3 1   MT  1.0  OPEN    
+33 32 2 / 5 3 1   MT  1.0  OPEN    
+34 32 2           MT  1.0  OPEN    
+35 32 2           MT  1.0  OPEN    
+36 32 2           MT  1.0  OPEN    
+37 32 2           MT  1.0  OPEN    
+38 32 2           MT  1.0  OPEN    
+39 32 2           MT  1.0  OPEN    
+40 32 2           MT  1.0  OPEN    
+41 32 2           MT  1.0  OPEN    
+42 32 2           MT  1.0  OPEN    
+43 32 2           MT  1.0  OPEN    
+44 32 2           MT  1.0  OPEN    
+45 32 2           MT  1.0  OPEN    
+46 32 2           MT  1.0  OPEN    
+47 32 2           MT  1.0  OPEN    
+48 32 2           MT  1.0  OPEN    
+49 32 2           MT  1.0  OPEN    
+50 32 2 / 2 1 3 / 1 3 1   MT  1.0  OPEN    
+50 32 2 / 2 1 3 / 2 3 1   MT  1.0  OPEN    
+50 32 2 / 2 1 3 / 3 3 1   MT  1.0  OPEN    
+50 32 2 / 2 1 3 / 4 3 1   MT  1.0  OPEN    
+50 32 2 / 2 1 3 / 5 3 1   MT  1.0  OPEN    
+51 32 2           MT  1.0  OPEN    
+52 32 2           MT  1.0  OPEN    
+53 32 2           MT  1.0  OPEN    
+54 32 2           MT  1.0  OPEN    
+55 32 2           MT  1.0  OPEN    
+56 32 2           MT  1.0  OPEN    
+57 32 2           MT  1.0  OPEN      
+58 32 2           MT  1.0  OPEN      
+59 32 2           MT  1.0  OPEN    
+60 32 2           MT  1.0  OPEN    
+61 32 2           MT  1.0  OPEN    
+62 32 2           MT  1.0  OPEN    
+63 32 2           MT  1.0  OPEN    
+64 32 2 / 2 1 3 / 1 3 1   MT  1.0  OPEN    
+64 32 2 / 2 1 3 / 2 3 1   MT  1.0  OPEN    
+64 32 2 / 2 1 3 / 3 3 1   MT  1.0  OPEN    
+64 32 2 / 2 1 3 / 4 3 1   MT  1.0  OPEN    
+64 32 2 / 2 1 3 / 5 3 1   MT  1.0  OPEN    
+65 32 2           MT  1.0  OPEN    
+66 32 2           MT  1.0  OPEN    
+67 32 2           MT  1.0  OPEN    
+68 32 2           MT  1.0  OPEN    
+69 32 2           MT  1.0  OPEN    
+70 32 2           MT  1.0  OPEN    
+71 32 2           MT  1.0  OPEN    
+72 32 2           MT  1.0  OPEN    
+73 32 2           MT  1.0  OPEN    
+74 32 2           MT  1.0  OPEN    
+75 32 2           MT  1.0  OPEN    
+76 32 2           MT  1.0  OPEN    
+77 32 2           MT  1.0  OPEN    
+78 32 2           MT  1.0  OPEN    
+79 32 2           MT  1.0  OPEN    
+80 32 2 / 1 3 1   MT  1.0  OPEN    
+80 32 2 / 2 3 1   MT  1.0  OPEN    
+80 32 2 / 3 3 1   MT  1.0  OPEN    
+80 32 2 / 4 3 1   MT  1.0  OPEN    
+80 32 2 / 5 3 1   MT  1.0  OPEN    
+81 32 2           MT  1.0  OPEN 
+
+DATE 2014 1  1.01
+RESULTS PLNRSTAGE NAME 'Planar Stage 2'
+RESULTS PLNRSTAGE WELL 'Well-1'
+RESULTS PLNRSTAGE DATE 2014-01-10
+RESULTS PLNRSTAGE BASENAME 'Well-1 - Frac'
+RESULTS PLNRSTAGE FRACS 'Well-1 - Frac_2' 'Well-1 - Frac_4' 
+RESULTS PLNRSTAGE SLABS '58 72'
+RESULTS PLNRSTAGE PERFOPTION 0
+RESULTS PLNRSTAGE LAYERMIN 2
+RESULTS PLNRSTAGE LAYERMAX 2
+RESULTS PLNRSTAGE END
+
+*PLNRFRAC 'Template_JDIR' 50,42,1 / 2 2 2  *BG_NAME 'Well-testj' *USE_SBG 'frac1'
+*PLNRFRAC 'Template_JDIR' 58,32,2 *BG_NAME 'Well-1 - Frac_2'
+*PLNRFRAC 'Template_JDIR' 72,32,2 *BG_NAME 'Well-1 - Frac_4'
+*RTYPE MATRIX BG 'Well-1 - Frac_2' NFZ 1 
+*RTYPE MATRIX BG 'Well-1 - Frac_2' FZ 2
+*RTYPE MATRIX BG 'Well-1 - Frac_4' NFZ 1 
+*RTYPE MATRIX BG 'Well-1 - Frac_4' FZ 2
+NDARCYCOR MATRIX BG 'Well-1 - Frac_2' NFZ 0 
+NDARCYCOR MATRIX BG 'Well-1 - Frac_2' FZ 270.30
+NDARCYCOR MATRIX BG 'Well-1 - Frac_4' NFZ 0 
+NDARCYCOR MATRIX BG 'Well-1 - Frac_4' FZ 270.30
+
+PERF  GEOA  'Well-1'
+** UBA               ff   Status  Connection  
+11 32 2 / 1 3 1   MT  1.0  OPEN    
+11 32 2 / 2 3 1   MT  1.0  OPEN    
+11 32 2 / 3 3 1   MT  1.0  OPEN    
+11 32 2 / 4 3 1   MT  1.0  OPEN    REFLAYER
+11 32 2 / 5 3 1   MT  1.0  OPEN    
+12 32 2 / 1 3 1   MT  1.0  OPEN    
+12 32 2 / 2 3 1   MT  1.0  OPEN    
+12 32 2 / 3 3 1   MT  1.0  OPEN    
+12 32 2 / 4 3 1   MT  1.0  OPEN    
+12 32 2 / 5 3 1   MT  1.0  OPEN    
+13 32 2 / 1 3 1   MT  1.0  OPEN    
+13 32 2 / 2 3 1   MT  1.0  OPEN    
+13 32 2 / 3 3 1   MT  1.0  OPEN    
+13 32 2 / 4 3 1   MT  1.0  OPEN    
+13 32 2 / 5 3 1   MT  1.0  OPEN    
+14 32 2 / 1 3 1   MT  1.0  OPEN    
+14 32 2 / 2 3 1   MT  1.0  OPEN    
+14 32 2 / 3 3 1   MT  1.0  OPEN    
+14 32 2 / 4 3 1   MT  1.0  OPEN    
+14 32 2 / 5 3 1   MT  1.0  OPEN    
+15 32 2 / 1 3 1   MT  1.0  OPEN    
+15 32 2 / 2 3 1   MT  1.0  OPEN    
+15 32 2 / 3 3 1   MT  1.0  OPEN    
+15 32 2 / 4 3 1   MT  1.0  OPEN    
+15 32 2 / 5 3 1   MT  1.0  OPEN    
+16 32 2 / 1 3 1   MT  1.0  OPEN    
+16 32 2 / 2 3 1   MT  1.0  OPEN    
+16 32 2 / 3 3 1   MT  1.0  OPEN    
+16 32 2 / 4 3 1   MT  1.0  OPEN    
+16 32 2 / 5 3 1   MT  1.0  OPEN    
+17 32 2 / 1 3 1   MT  1.0  OPEN    
+17 32 2 / 2 3 1   MT  1.0  OPEN    
+17 32 2 / 3 3 1   MT  1.0  OPEN    
+17 32 2 / 4 3 1   MT  1.0  OPEN    
+17 32 2 / 5 3 1   MT  1.0  OPEN    
+18 32 2 / 1 3 1   MT  1.0  OPEN    
+18 32 2 / 2 3 1   MT  1.0  OPEN    
+18 32 2 / 3 3 1   MT  1.0  OPEN    
+18 32 2 / 4 3 1   MT  1.0  OPEN    
+18 32 2 / 5 3 1   MT  1.0  OPEN    
+19 32 2           MT  1.0  OPEN    
+20 32 2           MT  1.0  OPEN    
+21 32 2           MT  1.0  OPEN    
+22 32 2 / 1 3 1   MT  1.0  OPEN    
+22 32 2 / 2 3 1   MT  1.0  OPEN    
+22 32 2 / 3 3 1   MT  1.0  OPEN    
+22 32 2 / 4 3 1   MT  1.0  OPEN    
+22 32 2 / 5 3 1   MT  1.0  OPEN    
+23 32 2 / 1 3 1   MT  1.0  OPEN    
+23 32 2 / 2 3 1   MT  1.0  OPEN    
+23 32 2 / 3 3 1   MT  1.0  OPEN    
+23 32 2 / 4 3 1   MT  1.0  OPEN    
+23 32 2 / 5 3 1   MT  1.0  OPEN    
+24 32 2 / 1 3 1   MT  1.0  OPEN    
+24 32 2 / 2 3 1   MT  1.0  OPEN    
+24 32 2 / 3 3 1   MT  1.0  OPEN    
+24 32 2 / 4 3 1   MT  1.0  OPEN    
+24 32 2 / 5 3 1   MT  1.0  OPEN    
+25 32 2 / 1 3 1   MT  1.0  OPEN    
+25 32 2 / 2 3 1   MT  1.0  OPEN    
+25 32 2 / 3 3 1   MT  1.0  OPEN    
+25 32 2 / 4 3 1   MT  1.0  OPEN    
+25 32 2 / 5 3 1   MT  1.0  OPEN    
+26 32 2 / 1 3 1   MT  1.0  OPEN    
+26 32 2 / 2 3 1   MT  1.0  OPEN    
+26 32 2 / 3 3 1   MT  1.0  OPEN    
+26 32 2 / 4 3 1   MT  1.0  OPEN    
+26 32 2 / 5 3 1   MT  1.0  OPEN    
+27 32 2           MT  1.0  OPEN    
+28 32 2           MT  1.0  OPEN    
+29 32 2           MT  1.0  OPEN    
+30 32 2 / 1 3 1   MT  1.0  OPEN    
+30 32 2 / 2 3 1   MT  1.0  OPEN    
+30 32 2 / 3 3 1   MT  1.0  OPEN    
+30 32 2 / 4 3 1   MT  1.0  OPEN    
+30 32 2 / 5 3 1   MT  1.0  OPEN    
+31 32 2 / 1 3 1   MT  1.0  OPEN    
+31 32 2 / 2 3 1   MT  1.0  OPEN    
+31 32 2 / 3 3 1   MT  1.0  OPEN    
+31 32 2 / 4 3 1   MT  1.0  OPEN    
+31 32 2 / 5 3 1   MT  1.0  OPEN    
+32 32 2           MT  1.0  OPEN    
+33 32 2 / 1 3 1   MT  1.0  OPEN    
+33 32 2 / 2 3 1   MT  1.0  OPEN    
+33 32 2 / 3 3 1   MT  1.0  OPEN    
+33 32 2 / 4 3 1   MT  1.0  OPEN    
+33 32 2 / 5 3 1   MT  1.0  OPEN    
+34 32 2           MT  1.0  OPEN    
+35 32 2           MT  1.0  OPEN    
+36 32 2           MT  1.0  OPEN    
+37 32 2           MT  1.0  OPEN    
+38 32 2           MT  1.0  OPEN    
+39 32 2           MT  1.0  OPEN    
+40 32 2           MT  1.0  OPEN    
+41 32 2           MT  1.0  OPEN    
+42 32 2           MT  1.0  OPEN    
+43 32 2           MT  1.0  OPEN    
+44 32 2           MT  1.0  OPEN    
+45 32 2           MT  1.0  OPEN    
+46 32 2           MT  1.0  OPEN    
+47 32 2           MT  1.0  OPEN    
+48 32 2           MT  1.0  OPEN    
+49 32 2           MT  1.0  OPEN    
+50 32 2 / 2 3 1 / 1 3 1  MT  1.0  OPEN    
+50 32 2 / 2 3 1 / 2 3 1  MT  1.0  OPEN    
+50 32 2 / 2 3 1 / 3 3 1  MT  1.0  OPEN    
+50 32 2 / 2 3 1 / 4 3 1  MT  1.0  OPEN    
+50 32 2 / 2 3 1 / 5 3 1  MT  1.0  OPEN     
+51 32 2           MT  1.0  OPEN    
+52 32 2           MT  1.0  OPEN    
+53 32 2           MT  1.0  OPEN    
+54 32 2           MT  1.0  OPEN    
+55 32 2           MT  1.0  OPEN    
+56 32 2           MT  1.0  OPEN    
+57 32 2           MT  1.0  OPEN    
+58 32 2 / 1 3 1   MT  1.0  OPEN    
+58 32 2 / 2 3 1   MT  1.0  OPEN    
+58 32 2 / 3 3 1   MT  1.0  OPEN    
+58 32 2 / 4 3 1   MT  1.0  OPEN    
+58 32 2 / 5 3 1   MT  1.0  OPEN    
+59 32 2           MT  1.0  OPEN    
+60 32 2           MT  1.0  OPEN    
+61 32 2           MT  1.0  OPEN    
+62 32 2           MT  1.0  OPEN    
+63 32 2           MT  1.0  OPEN    
+64 32 2 / 2 3 1 / 1 3 1   MT  1.0  OPEN    
+64 32 2 / 2 3 1 / 2 3 1   MT  1.0  OPEN    
+64 32 2 / 2 3 1 / 3 3 1   MT  1.0  OPEN    
+64 32 2 / 2 3 1 / 4 3 1   MT  1.0  OPEN    
+64 32 2 / 2 3 1 / 5 3 1   MT  1.0  OPEN    
+65 32 2           MT  1.0  OPEN    
+66 32 2           MT  1.0  OPEN    
+67 32 2           MT  1.0  OPEN    
+68 32 2           MT  1.0  OPEN    
+69 32 2           MT  1.0  OPEN    
+70 32 2           MT  1.0  OPEN    
+71 32 2           MT  1.0  OPEN    
+72 32 2 / 1 3 1   MT  1.0  OPEN    
+72 32 2 / 2 3 1   MT  1.0  OPEN    
+72 32 2 / 3 3 1   MT  1.0  OPEN    
+72 32 2 / 4 3 1   MT  1.0  OPEN    
+72 32 2 / 5 3 1   MT  1.0  OPEN    
+73 32 2           MT  1.0  OPEN    
+74 32 2           MT  1.0  OPEN    
+75 32 2           MT  1.0  OPEN    
+76 32 2           MT  1.0  OPEN    
+77 32 2           MT  1.0  OPEN    
+78 32 2           MT  1.0  OPEN    
+79 32 2           MT  1.0  OPEN    
+80 32 2 / 1 3 1   MT  1.0  OPEN    
+80 32 2 / 2 3 1   MT  1.0  OPEN    
+80 32 2 / 3 3 1   MT  1.0  OPEN    
+80 32 2 / 4 3 1   MT  1.0  OPEN    
+80 32 2 / 5 3 1   MT  1.0  OPEN    
+81 32 2           MT  1.0  OPEN    
+
+
+DATE 2014 1  1.02
+
+
+*BLOCKGROUP 'Well-1 - SRV 4_1' 
+*IJK 37     21      1    1 
+39     23      1    1 
+40:41  24      1    1 
+37     25      1    1 
+39     25      1    1 
+42     25      1    1 
+42:44  26      1    1 
+38     27      1    1 
+40     27      1    1 
+38     29      1    1 
+40:41  29      1    1 
+43     29      1    1 
+38:43  30      1    1 
+38:40  31      1    1 
+42     31      1    1 
+34:41  32      1    1 
+37:41  33      1    1 
+37:42  34      1    1 
+38:41  35      1    1 
+34:38  36      1    1 
+40:41  36      1    1 
+40:42  37:38   1    1 
+38     38      1    1 
+39     39      1    1 
+42     39      1    1 
+38:39  40      1    1 
+38     41      1    1 
+41     41      1    1 
+41:42  42      1    1 
+41     22      2    1 
+40:45  23      2    1 
+38:42  24      2    1 
+45:46  24      2    1 
+37:38  25      2    1 
+40     25      2:3  1 
+44     25:26   2    1 
+46:47  25      2    1 
+38:42  26:27   2    1 
+36     28:29   2    1 
+38:44  28      2    1 
+38:43  29      2    1 
+37:42  30      2    1 
+37     31      2    1 
+39:42  31      2    1 
+34     32      2    1 
+37:43  32      2    1 
+37:42  33      2    1 
+36:42  34      2    1 
+37:42  35      2    1 
+36     36      2    1 
+38:43  36      2    1 
+38:41  37:38   2    1 
+43     37:38   2    1 
+37:42  39      2    1 
+42     40      2    1 
+41     42      2    1 
+38:40  27      3    1 
+39     28:30   3    1 
+44     28      3    1 
+41     29      3    1 
+37     30      3    1 
+41:42  30      3    1 
+39:40  31:32   3    1 
+37     33      3    1 
+40     33      3    1 
+40:41  34      3    1 
+40:42  35      3    1 
+38     36:37   3    1 
+40     36      3    1 
+42     39      3    1 
+
+RESULTS CMPLXSTAGE NAME 'Well-1 - SRV 4_1'
+RESULTS CMPLXSTAGE WELL 'Well-1'
+RESULTS CMPLXSTAGE DATE 2014-01-20
+RESULTS CMPLXSTAGE FRACNAME 'Well-1 - SRV 4_1'
+RESULTS CMPLXSTAGE LAYERSUP 0
+RESULTS CMPLXSTAGE LAYERSDOWN 0
+RESULTS CMPLXSTAGE END
+** Please don't remove these RESULTS CMPLXFRACTURE keywords.
+RESULTS CMPLXFRACTURE NAME 'Well-1 - SRV 4_1'
+RESULTS CMPLXFRACTURE TEMPLATENAME 'Complex Template'
+RESULTS CMPLXFRACTURE PRIMFRACWIDTH 0.0005
+RESULTS CMPLXFRACTURE PRIMFRACPERM 500
+RESULTS CMPLXFRACTURE END
+
+*REFINE *INNERWIDTH 0.6096
+*BG 'Well-1 - SRV 4_1' INTO 5 5 1 K2INT 500 WF2 0.0005
+*PERMI MATRIX BG 'Well-1 - SRV 4_1' *NFZ 0.0001 
+*PERMI MATRIX BG 'Well-1 - SRV 4_1' *FZ 39.3701
+*PERMJ MATRIX BG 'Well-1 - SRV 4_1' *NFZ 0.0001 
+*PERMJ MATRIX BG 'Well-1 - SRV 4_1' *FZ 39.3701
+*PERMK MATRIX BG 'Well-1 - SRV 4_1' *NFZ 0.0001 
+*PERMK MATRIX BG 'Well-1 - SRV 4_1' *FZ 39.3701
+*RTYPE MATRIX BG 'Well-1 - SRV 4_1' NFZ 1 
+*RTYPE MATRIX BG 'Well-1 - SRV 4_1' FZ 2
+*NDARCYCOR MATRIX BG   'Well-1 - SRV 4_1' NFZ 0
+*NDARCYCOR MATRIX BG   'Well-1 - SRV 4_1' FZ 270.30
+
+PERF  GEOA  'Well-1'
+** UBA               ff   Status  Connection  
+11 32 2 / 1 3 1   MT  1.0  OPEN    
+11 32 2 / 2 3 1   MT  1.0  OPEN    
+11 32 2 / 3 3 1   MT  1.0  OPEN    
+11 32 2 / 4 3 1   MT  1.0  OPEN    REFLAYER
+11 32 2 / 5 3 1   MT  1.0  OPEN    
+12 32 2 / 1 3 1   MT  1.0  OPEN    
+12 32 2 / 2 3 1   MT  1.0  OPEN    
+12 32 2 / 3 3 1   MT  1.0  OPEN    
+12 32 2 / 4 3 1   MT  1.0  OPEN    
+12 32 2 / 5 3 1   MT  1.0  OPEN    
+13 32 2 / 1 3 1   MT  1.0  OPEN    
+13 32 2 / 2 3 1   MT  1.0  OPEN    
+13 32 2 / 3 3 1   MT  1.0  OPEN    
+13 32 2 / 4 3 1   MT  1.0  OPEN    
+13 32 2 / 5 3 1   MT  1.0  OPEN    
+14 32 2 / 1 3 1   MT  1.0  OPEN    
+14 32 2 / 2 3 1   MT  1.0  OPEN    
+14 32 2 / 3 3 1   MT  1.0  OPEN    
+14 32 2 / 4 3 1   MT  1.0  OPEN    
+14 32 2 / 5 3 1   MT  1.0  OPEN    
+15 32 2 / 1 3 1   MT  1.0  OPEN    
+15 32 2 / 2 3 1   MT  1.0  OPEN    
+15 32 2 / 3 3 1   MT  1.0  OPEN    
+15 32 2 / 4 3 1   MT  1.0  OPEN    
+15 32 2 / 5 3 1   MT  1.0  OPEN    
+16 32 2 / 1 3 1   MT  1.0  OPEN    
+16 32 2 / 2 3 1   MT  1.0  OPEN    
+16 32 2 / 3 3 1   MT  1.0  OPEN    
+16 32 2 / 4 3 1   MT  1.0  OPEN    
+16 32 2 / 5 3 1   MT  1.0  OPEN    
+17 32 2 / 1 3 1   MT  1.0  OPEN    
+17 32 2 / 2 3 1   MT  1.0  OPEN    
+17 32 2 / 3 3 1   MT  1.0  OPEN    
+17 32 2 / 4 3 1   MT  1.0  OPEN    
+17 32 2 / 5 3 1   MT  1.0  OPEN    
+18 32 2 / 1 3 1   MT  1.0  OPEN    
+18 32 2 / 2 3 1   MT  1.0  OPEN    
+18 32 2 / 3 3 1   MT  1.0  OPEN    
+18 32 2 / 4 3 1   MT  1.0  OPEN    
+18 32 2 / 5 3 1   MT  1.0  OPEN    
+19 32 2           MT  1.0  OPEN    
+20 32 2           MT  1.0  OPEN    
+21 32 2           MT  1.0  OPEN    
+22 32 2 / 1 3 1   MT  1.0  OPEN    
+22 32 2 / 2 3 1   MT  1.0  OPEN    
+22 32 2 / 3 3 1   MT  1.0  OPEN    
+22 32 2 / 4 3 1   MT  1.0  OPEN    
+22 32 2 / 5 3 1   MT  1.0  OPEN    
+23 32 2 / 1 3 1   MT  1.0  OPEN    
+23 32 2 / 2 3 1   MT  1.0  OPEN    
+23 32 2 / 3 3 1   MT  1.0  OPEN    
+23 32 2 / 4 3 1   MT  1.0  OPEN    
+23 32 2 / 5 3 1   MT  1.0  OPEN    
+24 32 2 / 1 3 1   MT  1.0  OPEN    
+24 32 2 / 2 3 1   MT  1.0  OPEN    
+24 32 2 / 3 3 1   MT  1.0  OPEN    
+24 32 2 / 4 3 1   MT  1.0  OPEN    
+24 32 2 / 5 3 1   MT  1.0  OPEN    
+25 32 2 / 1 3 1   MT  1.0  OPEN    
+25 32 2 / 2 3 1   MT  1.0  OPEN    
+25 32 2 / 3 3 1   MT  1.0  OPEN    
+25 32 2 / 4 3 1   MT  1.0  OPEN    
+25 32 2 / 5 3 1   MT  1.0  OPEN    
+26 32 2 / 1 3 1   MT  1.0  OPEN    
+26 32 2 / 2 3 1   MT  1.0  OPEN    
+26 32 2 / 3 3 1   MT  1.0  OPEN    
+26 32 2 / 4 3 1   MT  1.0  OPEN    
+26 32 2 / 5 3 1   MT  1.0  OPEN    
+27 32 2           MT  1.0  OPEN    
+28 32 2           MT  1.0  OPEN    
+29 32 2           MT  1.0  OPEN    
+30 32 2 / 1 3 1   MT  1.0  OPEN    
+30 32 2 / 2 3 1   MT  1.0  OPEN    
+30 32 2 / 3 3 1   MT  1.0  OPEN    
+30 32 2 / 4 3 1   MT  1.0  OPEN    
+30 32 2 / 5 3 1   MT  1.0  OPEN    
+31 32 2 / 1 3 1   MT  1.0  OPEN    
+31 32 2 / 2 3 1   MT  1.0  OPEN    
+31 32 2 / 3 3 1   MT  1.0  OPEN    
+31 32 2 / 4 3 1   MT  1.0  OPEN    
+31 32 2 / 5 3 1   MT  1.0  OPEN    
+32 32 2           MT  1.0  OPEN    
+33 32 2 / 1 3 1   MT  1.0  OPEN    
+33 32 2 / 2 3 1   MT  1.0  OPEN    
+33 32 2 / 3 3 1   MT  1.0  OPEN    
+33 32 2 / 4 3 1   MT  1.0  OPEN    
+33 32 2 / 5 3 1   MT  1.0  OPEN    
+34 32 2 / 1 3 1   MT  1.0  OPEN    
+34 32 2 / 2 3 1   MT  1.0  OPEN    
+34 32 2 / 3 3 1   MT  1.0  OPEN    
+34 32 2 / 4 3 1   MT  1.0  OPEN    
+34 32 2 / 5 3 1   MT  1.0  OPEN    
+35 32 2           MT  1.0  OPEN    
+36 32 2           MT  1.0  OPEN    
+37 32 2 / 1 3 1   MT  1.0  OPEN    
+37 32 2 / 2 3 1   MT  1.0  OPEN    
+37 32 2 / 3 3 1   MT  1.0  OPEN    
+37 32 2 / 4 3 1   MT  1.0  OPEN    
+37 32 2 / 5 3 1   MT  1.0  OPEN    
+38 32 2 / 1 3 1   MT  1.0  OPEN    
+38 32 2 / 2 3 1   MT  1.0  OPEN    
+38 32 2 / 3 3 1   MT  1.0  OPEN    
+38 32 2 / 4 3 1   MT  1.0  OPEN    
+38 32 2 / 5 3 1   MT  1.0  OPEN    
+39 32 2 / 1 3 1   MT  1.0  OPEN    
+39 32 2 / 2 3 1   MT  1.0  OPEN    
+39 32 2 / 3 3 1   MT  1.0  OPEN    
+39 32 2 / 4 3 1   MT  1.0  OPEN    
+39 32 2 / 5 3 1   MT  1.0  OPEN    
+40 32 2 / 1 3 1   MT  1.0  OPEN    
+40 32 2 / 2 3 1   MT  1.0  OPEN    
+40 32 2 / 3 3 1   MT  1.0  OPEN    
+40 32 2 / 4 3 1   MT  1.0  OPEN    
+40 32 2 / 5 3 1   MT  1.0  OPEN    
+41 32 2 / 1 3 1   MT  1.0  OPEN    
+41 32 2 / 2 3 1   MT  1.0  OPEN    
+41 32 2 / 3 3 1   MT  1.0  OPEN    
+41 32 2 / 4 3 1   MT  1.0  OPEN    
+41 32 2 / 5 3 1   MT  1.0  OPEN    
+42 32 2 / 1 3 1   MT  1.0  OPEN    
+42 32 2 / 2 3 1   MT  1.0  OPEN    
+42 32 2 / 3 3 1   MT  1.0  OPEN    
+42 32 2 / 4 3 1   MT  1.0  OPEN    
+42 32 2 / 5 3 1   MT  1.0  OPEN    
+43 32 2 / 1 3 1   MT  1.0  OPEN    
+43 32 2 / 2 3 1   MT  1.0  OPEN    
+43 32 2 / 3 3 1   MT  1.0  OPEN    
+43 32 2 / 4 3 1   MT  1.0  OPEN    
+43 32 2 / 5 3 1   MT  1.0  OPEN    
+44 32 2           MT  1.0  OPEN    
+45 32 2           MT  1.0  OPEN    
+46 32 2           MT  1.0  OPEN    
+47 32 2           MT  1.0  OPEN    
+48 32 2           MT  1.0  OPEN    
+49 32 2           MT  1.0  OPEN    
+50 32 2 / 2 1 3 / 1 3 1   MT  1.0  OPEN    
+50 32 2 / 2 1 3 / 2 3 1   MT  1.0  OPEN    
+50 32 2 / 2 1 3 / 3 3 1   MT  1.0  OPEN    
+50 32 2 / 2 1 3 / 4 3 1   MT  1.0  OPEN    
+50 32 2 / 2 1 3 / 5 3 1   MT  1.0  OPEN    
+51 32 2           MT  1.0  OPEN    
+52 32 2           MT  1.0  OPEN    
+53 32 2           MT  1.0  OPEN    
+54 32 2           MT  1.0  OPEN    
+55 32 2           MT  1.0  OPEN    
+56 32 2           MT  1.0  OPEN    
+57 32 2           MT  1.0  OPEN    
+58 32 2 / 1 3 1   MT  1.0  OPEN    
+58 32 2 / 2 3 1   MT  1.0  OPEN    
+58 32 2 / 3 3 1   MT  1.0  OPEN    
+58 32 2 / 4 3 1   MT  1.0  OPEN    
+58 32 2 / 5 3 1   MT  1.0  OPEN    
+59 32 2           MT  1.0  OPEN    
+60 32 2           MT  1.0  OPEN    
+61 32 2           MT  1.0  OPEN    
+62 32 2           MT  1.0  OPEN    
+63 32 2           MT  1.0  OPEN    
+64 32 2 / 2 1 3 / 1 3 1   MT  1.0  OPEN    
+64 32 2 / 2 1 3 / 2 3 1   MT  1.0  OPEN    
+64 32 2 / 2 1 3 / 3 3 1   MT  1.0  OPEN    
+64 32 2 / 2 1 3 / 4 3 1   MT  1.0  OPEN    
+64 32 2 / 2 1 3 / 5 3 1   MT  1.0  OPEN    
+65 32 2           MT  1.0  OPEN    
+66 32 2           MT  1.0  OPEN    
+67 32 2           MT  1.0  OPEN    
+68 32 2           MT  1.0  OPEN    
+69 32 2           MT  1.0  OPEN    
+70 32 2           MT  1.0  OPEN    
+71 32 2           MT  1.0  OPEN    
+72 32 2 / 1 3 1   MT  1.0  OPEN    
+72 32 2 / 2 3 1   MT  1.0  OPEN    
+72 32 2 / 3 3 1   MT  1.0  OPEN    
+72 32 2 / 4 3 1   MT  1.0  OPEN    
+72 32 2 / 5 3 1   MT  1.0  OPEN    
+73 32 2           MT  1.0  OPEN    
+74 32 2           MT  1.0  OPEN    
+75 32 2           MT  1.0  OPEN    
+76 32 2           MT  1.0  OPEN    
+77 32 2           MT  1.0  OPEN    
+78 32 2           MT  1.0  OPEN    
+79 32 2           MT  1.0  OPEN    
+80 32 2 / 1 3 1   MT  1.0  OPEN    
+80 32 2 / 2 3 1   MT  1.0  OPEN    
+80 32 2 / 3 3 1   MT  1.0  OPEN    
+80 32 2 / 4 3 1   MT  1.0  OPEN    
+80 32 2 / 5 3 1   MT  1.0  OPEN    
+81 32 2           MT  1.0  OPEN    
+DATE 2014 1  1.03
+STOP

@@ -1,0 +1,280 @@
+   ******************************************************************************
+   ** mxFRR002.dat:           Dual Permeability Radial Coning Model            **                 
+   ******************************************************************************
+   **************************************************************************************
+   **                                                                                  **
+   ** FILE:                 MXFRR002.DAT                                               **
+   **                                                                                  **
+   ** MODEL:  10x1x15 RADIAL      FRACTURED RESERVOIR        DUAL PERMEABILITY OPTION  **
+   **         GAS CAP             2 ROCK TYPES               UPWARD LAYERING           **
+   **         FIELD UNIT                                                               **
+   **                                                                                  **        
+   **************************************************************************************
+   **                                                                                  **
+   ** A two-layer well is depleting a fractured reservoir with  an  initial  gas  cap. **   
+   ** Dual permeability is used with matrix connectivity in  the  vertical  direction. **
+   ** Radial coordinate grid is used.                                                  **
+   **                                                                                  **
+   **************************************************************************************
+   ** CONTACT:    CMG,   (403)531-1300;   282-6495 (fax);support@cmgl.ca    (Internet) **
+   **************************************************************************************                                
+
+RESULTS SIMULATOR IMEX
+
+   *********************************************************************** 
+   ** I/O Control Section
+   ***********************************************************************
+   
+   *TITLE1
+   'DUAL POROSITY, PERMEABILITY CONING TEST'
+   *TITLE2
+   'Coning Study in Reservoir with Initial Gas Cap'
+ 
+ 
+   *INUNIT *FIELD
+
+   *WPRN   *WELL 10
+   *WPRN   *GRID 10
+   *WPRN   *ITER *NEWTON
+   *WRST   0
+   *WSRF   *GRID   *TIME
+   *WSRF   *WELL   1 
+   *OUTSRF *GRID   *SO *SG *PRES  
+
+
+   *GRID *RADIAL 10 1 15  ** Model a radial grid system, 10 x 1 x 15.
+   *********************************************************************** 
+   ** Reservoir Description Section
+   ***********************************************************************
+
+   ** Grid sizes in I,J, and K directions
+   *DI *IVAR                                    ** There are 10 grid blocks in the
+      2.00     2.32     5.01    10.84    23.40  ** I direction; therefore 10 values
+     50.55   109.21   235.92   509.68  1101.08  ** for I dimension are expected.
+
+   *DJ *CON                        ** One value is expected for the J direction.
+    360.00000   
+
+   *DK *KVAR                       ** 15 values are expected for K dimensions.
+    100.0  50.0  20.0  18.0  19.0  12.0  18.0
+    2*8.0  14.0  16.0  15.0  26.0  15.0  20.0    
+
+   *DEPTH 1 1 1 2000.00            ** The depth from a reference block
+                                   ** (1,1,1) is 2000 ft.
+
+   *DUALPERM                       ** Use the DUAL PERMEABILITY option
+   *SHAPE *GK                      ** Use Gilman & Kazemi equation for shape
+                                   ** factor calculation.
+    
+   *DIFRAC *CON                    ** Fracture data, starting with fracture
+   50.0                            ** spacing.
+   *DJFRAC *CON                    ** It is constant everywhere.
+   50.0
+   *DKFRAC *CON
+   50.0   
+
+   *POR *MATRIX *KVAR                ** Porosity must be the first grid array
+     0.157  0.116  0.12  0.105  0.12  ** entered. Enter one value for each 
+     0.13   0.14   0.08  2*0.17       ** layer.
+     0.087  0.097  0.111 0.16   0.13   
+
+   *POR *FRACTURE *KVAR            ** Enter values for the fracture.
+   2*0.00  13*0.040   
+
+   *PRPOR *MATRIX 14.7             ** Rock Compressibility
+   *CPOR  *MATRIX  3.0E-6    
+
+   *PRPOR *FRACTURE 14.7           ** Fracture Compressibility
+   *CPOR  *FRACTURE  3.0E-6   
+
+   *PERMI *MATRIX *CON             ** Permeability for the rock matrix.
+   100.0                           ** Values are constant in all 
+   *PERMJ *MATRIX *CON             ** directions.
+   100.0
+   *PERMK *MATRIX *CON
+    10.0
+ 
+   *TRANSI *MATRIX *CON            ** The matrix blocks are connected only in the
+   0.0                             ** vertical direction. Set the transmissibility
+   *TRANSJ *MATRIX *CON            ** multipliers in the horizontal directions to
+   0.0                             ** zero. Vertical will default to 1.0.
+   *TRANSK *MATRIX *KVAR           ** multipliers in the horizontal directions to
+   2*1.0 0.0 12*1.0                ** zero. Vertical will default to 1.0.
+
+   *PERMI *FRACTURE *CON           ** The fracture permeability is also 
+   400.0                           ** constant in each direction.
+   *PERMJ *FRACTURE *CON
+   400.0
+   *PERMK *FRACTURE *CON
+    40.0                              
+
+
+   *MODEL *BLACKOIL                ** Three phase problem.
+   *********************************************************************** 
+   ** Component Properties Section
+   *********************************************************************** 
+ 
+   *PVT
+   ** p       rs    bo       eg        vo       vg
+     15.0     5.0  1.050    4.444     3.934    0.0105
+    115.0    43.0  1.080   40.000     2.776    0.0109
+    315.0    95.0  1.100  104.998     2.400    0.0113
+    615.0   160.0  1.126  209.996     2.053    0.0122
+    915.0   210.0  1.148  320.000     1.810    0.0132
+   1215.0   265.0  1.170  429.923     1.600    0.0143
+   1515.0   315.0  1.190  539.957     1.413    0.0153
+   2015.0   403.0  1.223  739.645     1.196    0.0173
+   2515.0   493.0  1.257  930.233     0.990    0.0193
+   3015.0   583.0  1.293 1109.878     0.880    0.0212
+   3515.0   680.0  1.331 1270.648     0.790    0.0232
+   4015.0   782.0  1.372 1420.455     0.725    0.0253
+   4273.0   836.0  1.393 1490.313     0.702    0.0264
+   4515.0   883.0  1.410 1560.062     0.679    0.0274
+   5015.0   983.0  1.449 1709.402     0.638    0.0295
+   5515.0  1083.0  1.487 1988.072     0.602    0.0317
+   6015.0  1183.0  1.526 2109.705     0.572    0.0338
+ 
+   *DENSITY  *OIL      56.70000
+   *DENSITY  *GAS       0.0561600
+   *DENSITY  *WATER    62.40000
+ 
+   *CO      9.2810E-6
+   *CVO     4.6000E-5
+   *BWI     1.07
+   *CW      3.5000E-6
+   *REFPW  14.70
+   *VWI     0.35
+   *CVW     0.0
+
+
+   *ROCKFLUID
+   ***********************************************************************  
+   ** Rock-fluid Properties Section
+   *********************************************************************** 
+
+   *RPT  1                         ** Set rock type 1 for the fracture
+   *SWT
+   ** Sw     krw    krow
+     0.00   0.00    1.00
+     0.05   0.05    0.95
+     0.25   0.25    0.75
+     0.50   0.50    0.50
+     0.75   0.75    0.25
+     0.95   0.95    0.05
+     1.00   1.00    0.00
+
+   *SLT
+   ** Sl    krg   krog
+     0.00  1.00   0.00
+     0.05  0.95   0.05
+     0.25  0.75   0.25
+     0.50  0.50   0.50
+     0.75  0.25   0.75
+     0.95  0.05   0.95
+     1.00  0.00   1.00
+ 
+   *RPT 2                          ** Set rock type 2 for the matrix.
+   *SWT
+   ** Sw    krw       krow     Pcow
+     0.2    0.0       1.0      5.00
+     0.25   0.0004    0.6027   4.00
+     0.30   0.0024    0.4490   3.00
+     0.31   0.0033    0.4165   2.80
+     0.35   0.0075    0.3242   2.50
+     0.40   0.0167    0.2253   2.00
+     0.45   0.0310    0.1492   1.80
+     0.50   0.0515    0.0927   1.60
+     0.60   0.1146    0.0265   1.40
+     0.70   0.2133    0.0031   1.20
+     0.80   0.3542    0.0      1.00
+     0.90   0.5438    0.0      0.50
+     1.00   0.7885    0.0      0.00
+
+   *SLT
+   ** Sl    krg       krog         Pcog
+     0.3    0.6345    0.0          1.92
+     0.4    0.5036    0.00002      1.15
+     0.5    0.3815    0.00096      0.77
+     0.6    0.2695    0.00844      0.50
+     0.7    0.1692    0.03939      0.32
+     0.8    0.0835    0.13010      0.22
+     0.85   0.0477    0.21670      0.18
+     0.9    0.0183    0.34540      0.15
+     0.95   0.0       0.53020      0.12
+     1.0    0.0       1.00000      0.10
+ 
+   *RTYPE *FRACTURE *CON 1         ** Assign set 1 to the fracture blocks
+   *RTYPE *MATRIX   *CON 2         ** and set 2 to the matrix blocks.
+
+
+   *INITIAL
+   ***********************************************************************   
+   ** Initial Conditions Section
+   ***********************************************************************   
+
+   *VERTICAL *BLOCK_CENTER *WATER_OIL_GAS 
+   *PB  *FRACTURE *CON  0.0
+   *PB  *MATRIX   *CON  0.0
+   *REFPRES     3015.0
+   *REFDEPTH    2000.0
+   *DWOC        1900.0
+   *DGOC        1726.0
+                                
+
+   *NUMERICAL
+   ***********************************************************************   
+   ** Numerical methods Control Section
+   ***********************************************************************   
+
+   *DTMAX          100.0     
+   *MAXSTEPS       100
+   *NORM *PRESS    250.
+   *NORM *SATUR      0.3
+
+
+   *RUN
+   ***********************************************************************   
+   ** Well data Section
+   ***********************************************************************   
+     
+   *DATE 1994 01 01
+   *DTWELL   0.05
+   *WELL 1 'Producer' *VERT 1 1
+
+   *PRODUCER 1
+   *OPERATE *MAX *STO  500.00         ** primary operating constraint is 
+                                      ** oil rate for an oil producer.
+   *OPERATE *MIN *BHP 2500.00 *STOP   ** Also monitor bottomhole pressure
+                                      ** and stop when min. of 2500 psi is
+                                      ** reached.
+   *MONITOR *GOR      2000.00 *STOP   ** Monitor GOR; stop when reaching 
+                                      ** 2000 scf/STB.
+   *MONITOR *BACKFLOW         *STOP   ** Stop as soon as backflow occurs.   
+
+   **               rad    geofac    wfrac   skin
+   *GEOMETRY  *K   0.25    0.500     1.00    0.0
+
+   *PERFV *GEO 1
+   **  kf     ff                         
+      8:9    1.0
+
+   *AIMWELL *WELLN
+ 
+    TIME 20.0                         ** Well change at 20 days.
+   *DTWELL 0.25                       ** Size of first timestep after change.
+   *ALTER                             ** Change the primary (first) operating
+     1                                ** constraint for Well 1 to 300 STB/D.
+   300.0      
+
+   *TIME 50.0                         ** Well change at 50 days.
+   *ALTER
+     1
+   500.0
+
+   *TIME 750.0                        ** Well change at 750 days.
+   *ALTER
+     1
+   400.0
+
+   *TIME 900.0                        ** Stop the simulation at 900 days.
+   *STOP

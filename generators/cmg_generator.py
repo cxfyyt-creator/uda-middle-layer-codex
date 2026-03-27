@@ -6,12 +6,14 @@
 # =============================================================================
 
 import json
+import shutil
 import sys
 from pathlib import Path
 from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.confidence_checks import evaluate_confidence
+from utils.cmg_case_dependencies import scan_cmg_case_dependencies
 from utils.rule_loader import get_loader
 from utils.reporting import write_report_bundle
 from utils.target_preflight import evaluate_target_preflight
@@ -54,13 +56,31 @@ def _get_modifier(obj):
         return obj.get("modifier") or modifier_from_distribution(obj)
     return None
 
+
+def _get_equalsi_scale(obj):
+    if not isinstance(obj, dict):
+        return None
+    if obj.get("type") == "reference" and str(obj.get("relation", "")).upper() == "EQUALSI":
+        return float(obj.get("scale", 1.0) or 1.0)
+    hint = obj.get("source_format_hint") or {}
+    if str(hint.get("keyword", "")).upper() == "*EQUALSI":
+        return float(hint.get("scale", 1.0) or 1.0)
+    return None
+
 # ── CMG 数组写入 ──────────────────────────────────────────────────────────────
 
 def _write_array(lines, keyword, obj):
-    """根据 JSON 对象的 type/modifier 写出 CMG 数组关键字"""
+    """?? JSON ??? type/modifier ?? CMG ?????"""
     if obj is None:
         return
     t = obj.get("type") if isinstance(obj, dict) else None
+    equalsi_scale = _get_equalsi_scale(obj)
+    if equalsi_scale is not None:
+        if abs(equalsi_scale - 1.0) < 1e-12:
+            lines.append(f"{keyword} *EQUALSI")
+        else:
+            lines.append(f"{keyword} *EQUALSI * {_fmt(equalsi_scale).strip()}")
+        return
     mod = _get_modifier(obj)
     val = _get_val(obj)
 
@@ -114,7 +134,54 @@ class CMGGenerator:
         self._rl = get_loader()
         self._gen_cfg = self._rl.cmg_gen_config()
 
+    def _preserved_cmg_deck(self, data):
+        if not isinstance(data, dict):
+            return None
+        meta = data.get("meta", {}) or {}
+        if str(meta.get("source_software", "")).lower() != "cmg_imex":
+            return None
+        if meta.get("_cmg_roundtrip_mode") != "source_faithful":
+            return None
+        raw_lines = meta.get("_cmg_raw_deck_lines")
+        if not isinstance(raw_lines, list) or not raw_lines:
+            return None
+        text = "\n".join(str(line) for line in raw_lines).rstrip()
+        if not text:
+            return None
+        return text + "\n"
+
+    def _copy_external_file_refs(self, data, output_file):
+        if not isinstance(data, dict) or not output_file:
+            return
+
+        meta = data.get("meta", {}) or {}
+        raw_lines = meta.get("_cmg_raw_deck_lines")
+        source_dir = meta.get("_cmg_source_dir")
+        if not raw_lines or not source_dir:
+            return
+
+        dst_root = Path(output_file).parent
+        deps = meta.get("_cmg_case_dependencies") or scan_cmg_case_dependencies(raw_lines, source_dir)
+        for item in deps.get("runtime_inputs", []):
+            ref = item.get("path")
+            if not ref:
+                continue
+            src_path = Path(item.get("source_path") or ref)
+            dst_path = dst_root / Path(ref).name
+            if not src_path.exists():
+                continue
+            if src_path.resolve() == dst_path.resolve():
+                continue
+            if dst_path.exists():
+                continue
+            dst_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src_path, dst_path)
+
     def generate(self, data):
+        preserved = self._preserved_cmg_deck(data)
+        if preserved is not None:
+            return preserved
+
         lines = []
         meta      = data.get("meta", {})
         grid      = data.get("grid", {})
@@ -187,8 +254,7 @@ class CMGGenerator:
         lines.append("** INITIAL")
         lines.append("** ============================================================")
         lines.append("*INITIAL")
-        lines.append("*VERTICAL *BLOCK_CENTER *WATER_OIL_GAS")
-        self._write_section(lines, "initial", initial)
+        self._write_initial(lines, initial)
         lines.append("")
 
         # ── NUMERICAL ─────────────────────────────────────────────────────────
@@ -197,6 +263,7 @@ class CMGGenerator:
         lines.append("** ============================================================")
         lines.append("*NUMERICAL")
         self._write_section(lines, "numerical", numerical)
+        self._write_cmg_numerical_directives(lines, numerical)
         lines.append("")
 
         # ── WELLS ─────────────────────────────────────────────────────────────
@@ -224,15 +291,16 @@ class CMGGenerator:
             obj = section_data.get(key)
             if obj is None:
                 continue
+            is_reference = isinstance(obj, dict) and obj.get("type") == "reference"
             val = _get_val(obj)
-            if val is None:
+            if val is None and not (fmt == "array" and is_reference):
                 continue
 
             if fmt == "scalar_inline":
                 lines.append(f"{kw}  {_fmt(val).strip()}")
             elif fmt == "array":
                 out_obj = obj
-                if isinstance(val, list) and section_name in ("grid", "reservoir") and key in (
+                if (not is_reference) and isinstance(val, list) and section_name in ("grid", "reservoir") and key in (
                     "dk", "porosity", "perm_i", "perm_j", "perm_k", "ntg"
                 ):
                     out_obj = dict(obj)
@@ -329,10 +397,48 @@ class CMGGenerator:
             v = depth_obj.get("value", 0)
             lines.append(f"*DEPTH  {i}  {j}  {k}  {_fmt(v).strip()}")
 
+    def _write_initial(self, lines, initial):
+        has_user_input_fields = any(
+            initial.get(key) is not None
+            for key in ("pressure_table", "water_saturation", "oil_saturation", "gas_saturation")
+        )
+        if has_user_input_fields:
+            lines.append("*USER_INPUT")
+        else:
+            lines.append("*VERTICAL *BLOCK_CENTER *WATER_OIL_GAS")
+        self._write_section(lines, "initial", initial)
+
+    def _write_cmg_numerical_directives(self, lines, numerical):
+        directives = []
+
+        for bucket_name in ("_cmg_control_directives", "_cmg_solver_directives"):
+            for seq, item in enumerate(numerical.get(bucket_name, []) or []):
+                if not isinstance(item, dict):
+                    continue
+                keyword = str(item.get("keyword", "")).strip()
+                if not keyword or keyword.upper() == "*NOLIST":
+                    continue
+                directives.append((
+                    int(item.get("line", 10**9) or 10**9),
+                    seq,
+                    keyword,
+                    [str(tok) for tok in (item.get("tokens") or [])],
+                ))
+
+        directives.sort(key=lambda x: (x[0], x[1]))
+        for _, _, keyword, tokens in directives:
+            line = " ".join([keyword, *tokens]).strip()
+            if line:
+                lines.append(line)
+
     # ── 流体写入 ──────────────────────────────────────────────────────────────
 
     def _write_fluid(self, lines, fluid):
         model = str(fluid.get("model", "BLACKOIL")).upper()
+
+        tres = fluid.get("reservoir_temperature")
+        if tres is not None and _get_val(tres) is not None:
+            lines.append(f"*TRES  {_fmt(_get_val(tres)).strip()}")
 
         pvt = _merge_pvt(fluid)
         if pvt:
@@ -341,6 +447,14 @@ class CMGGenerator:
             lines.append(f"** {'p':>12} {'rs':>12} {'bo':>12} {'eg':>12} {'viso':>12} {'visg':>12}")
             for row in pvt["rows"]:
                 lines.append("  " + "".join(_fmt(v) for v in row))
+        else:
+            zg = fluid.get("zg_table")
+            if zg and zg.get("rows"):
+                lines.append("")
+                lines.append("*PVT *ZG")
+                lines.append(f"** {'p':>12} {'rs':>12} {'bo':>12} {'zg':>12} {'viso':>12} {'visg':>12}")
+                for row in zg["rows"]:
+                    lines.append("  " + "".join(_fmt(v) for v in row[:6]))
 
         if model.startswith("MIS"):
             pvts = fluid.get("pvts_table")
@@ -358,7 +472,7 @@ class CMGGenerator:
 
         cfg = self._gen_cfg.get("fluid", {})
         for key, field_cfg in cfg.items():
-            if key == "pvt_table":
+            if key in {"pvt_table", "reservoir_temperature"}:
                 continue
             kw = field_cfg.get("keyword")
             if not kw:
@@ -370,6 +484,10 @@ class CMGGenerator:
             if val is None:
                 continue
             lines.append(f"{kw}  {_fmt(val).strip()}")
+
+        gas_gravity = fluid.get("gas_gravity")
+        if gas_gravity is not None and _get_val(gas_gravity) is not None:
+            lines.append(f"*GRAVITY *GAS  {_fmt(_get_val(gas_gravity)).strip()}")
 
 
     # ── 相渗写入 ──────────────────────────────────────────────────────────────
@@ -555,6 +673,9 @@ def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/gen
             data = json.load(f)
     else:
         data = data_or_json
+    generator = CMGGenerator()
+    preserved_content = generator._preserved_cmg_deck(data) if isinstance(data, dict) else None
+    source_faithful = preserved_content is not None
 
     def _write_failed_report(errors, warnings=None):
         md_path, json_path = write_report_bundle(
@@ -587,20 +708,28 @@ def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/gen
         "warning_threshold": 0.9, "block_threshold": 0.5, "target": "cmg",
     }
 
-    if preflight["blockers"]:
-        _write_failed_report(preflight["blockers"], warnings=preflight["warnings"])
+    effective_preflight_blockers = list(preflight["blockers"])
+    if source_faithful:
+        effective_preflight_blockers = [
+            item for item in effective_preflight_blockers
+            if str(item).startswith("missing required CMG runtime input:")
+        ]
+
+    if effective_preflight_blockers:
+        _write_failed_report(effective_preflight_blockers, warnings=preflight["warnings"])
         raise ValueError(
             "CMG generation blocked by preflight checks: "
-            + "; ".join(preflight["blockers"])
+            + "; ".join(effective_preflight_blockers)
         )
-    if confidence_check["blockers"]:
+    effective_confidence_blockers = [] if source_faithful else list(confidence_check["blockers"])
+    if effective_confidence_blockers:
         _write_failed_report(confidence_check["blockers"], warnings=preflight["warnings"] + confidence_check["warnings"])
         raise ValueError(
             "CMG generation blocked by very low-confidence critical fields: "
-            + "; ".join(confidence_check["blockers"])
+            + "; ".join(effective_confidence_blockers)
         )
 
-    content = CMGGenerator().generate(data)
+    content = preserved_content if preserved_content is not None else generator.generate(data)
 
     out_path = None
     if output_file:
@@ -608,11 +737,20 @@ def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/gen
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(content)
+        generator._copy_external_file_refs(data, out_path)
 
     warnings = []
     wells = data.get("wells", []) if isinstance(data, dict) else []
+    meta = data.get("meta", {}) if isinstance(data, dict) else {}
+    deps = meta.get("_cmg_case_dependencies", {}) if isinstance(meta, dict) else {}
     if not wells:
         warnings.append("no wells found; WELL DATA section may be empty")
+    runtime_inputs = deps.get("runtime_inputs", []) or []
+    missing_runtime = deps.get("missing_runtime_inputs", []) or []
+    if runtime_inputs:
+        warnings.append(f"cmg case runtime inputs detected: {len(runtime_inputs)}")
+    for item in missing_runtime:
+        warnings.append(f"missing cmg runtime input: {item.get('path')}")
     warnings.extend(f"preflight: {w}" for w in preflight["warnings"][:10])
     if len(preflight["warnings"]) > 10:
         warnings.append(f"preflight: omitted {len(preflight['warnings']) - 10} more items")
@@ -638,6 +776,7 @@ def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/gen
             "has_pvto_table": bool(data.get("fluid", {}).get("pvto_table")) if isinstance(data, dict) else False,
             "has_pvdg_table": bool(data.get("fluid", {}).get("pvdg_table")) if isinstance(data, dict) else False,
             "has_pvt_table": bool(data.get("fluid", {}).get("pvt_table")) if isinstance(data, dict) else False,
+            "case_dependencies": deps if isinstance(data, dict) else {},
             "preflight": preflight,
             "confidence_check": confidence_check,
         },
