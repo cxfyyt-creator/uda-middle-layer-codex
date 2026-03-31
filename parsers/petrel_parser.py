@@ -523,138 +523,171 @@ class PetrelParser:
 
     # ── 自定义处理器 ──────────────────────────────────────────────────────────
 
-    def _parse_equals(self, R):
-        """
-        EQUALS 批量赋值块：'KW' value [I1 I2 J1 J2 K1 K2] /
 
-        Eclipse 规则：如果某行没有指定 BOX，沿用上一行指定的 BOX。
-        SPE2 正是利用这一规则：DZ/PERMR/PORO 一组，只有 DZ 带 BOX，
-        后续条目继承同一层的 BOX。
-        """
+    def _build_array_keyword_reverse(self, include_unit=False):
         kw_map_full = self._rl.petrel_kw_map()
         reverse = {}
         for kw, entry in kw_map_full.items():
             if entry.get("format") == "array" and "json" in entry:
                 js = entry["json"]
-                reverse[kw.upper()] = (js["section"], js["key"], entry.get("unit", ""))
-        reverse.update({
-            "PERMR": ("reservoir", "perm_i", "md"),
-            "DTHETA": ("grid", "dtheta", "deg"),
-            "TOPS": ("grid", "tops_ref", "ft"),
-        })
+                if include_unit:
+                    reverse[kw.upper()] = (js["section"], js["key"], entry.get("unit", ""))
+                else:
+                    reverse[kw.upper()] = (js["section"], js["key"])
+        if include_unit:
+            reverse.update({
+                "PERMR": ("reservoir", "perm_i", "md"),
+                "DTHETA": ("grid", "dtheta", "deg"),
+                "TOPS": ("grid", "tops_ref", "ft"),
+            })
+        else:
+            reverse["PERMR"] = ("reservoir", "perm_i")
+        return reverse
 
+    def _read_edit_record(self):
+        """
+        Read one EQUALS/COPY/MULTIPLY-style record.
+        A single slash-only record terminates the whole block.
+        Unlike _read_until_slash, this allows bare array names like PORO/PERMX.
+        """
+        row = []
+        while self._peek():
+            ln, tok = self._peek()
+            self.pos += 1
+            if tok == "/":
+                while self._peek():
+                    ln2, _ = self._peek()
+                    if ln2 != ln:
+                        break
+                    self.pos += 1
+                return row, (len(row) == 0)
+            row.append(tok)
+        return row, bool(not row)
+
+    def _row_numbers(self, tokens):
+        nums = []
+        for tok in tokens:
+            exp = _expand_repeat(tok)
+            if exp is not None:
+                nums.extend(exp)
+                continue
+            try:
+                nums.append(_to_float(tok))
+            except (ValueError, TypeError):
+                pass
+        return nums
+
+    def _normalize_edit_keyword(self, tok):
+        return str(tok).strip("'").strip().upper()
+
+    def _extract_box(self, numeric_tokens, fallback_box=None):
+        if len(numeric_tokens) >= 6:
+            candidate = numeric_tokens[:6]
+            if all(float(v) == int(v) for v in candidate):
+                return [int(v) for v in candidate]
+        return fallback_box
+
+    def _box_is_full_layer(self, box, ni, nj):
+        if not box or len(box) != 6:
+            return False
+        i1, i2, j1, j2, _, _ = box
+        return i1 == 1 and i2 == ni and j1 == 1 and j2 == nj
+
+    def _expand_obj_to_k_values(self, obj, nk):
+        nk = max(int(nk or 1), 1)
+        if obj is None:
+            return [None] * nk
+        if obj.get("type") == "scalar":
+            return [obj.get("value")] * nk
+        if obj.get("type") == "array":
+            vals = list(obj.get("values") or [])
+            if len(vals) == nk:
+                return vals[:]
+            if len(vals) == 1:
+                return vals * nk
+            if len(vals) < nk:
+                return vals + [None] * (nk - len(vals))
+            return vals[:nk]
+        return [None] * nk
+
+    def _collapse_k_values(self, values, unit, src, *, distribution=None, axis=None, format_hint=None):
+        cleaned = [0.0 if v is None else v for v in values]
+        if len(cleaned) == 1 or len(set(cleaned)) == 1:
+            return _scalar(
+                cleaned[0],
+                unit,
+                src,
+                distribution=distribution or "constant",
+                axis=axis,
+                format_hint=format_hint,
+            )
+        return _array(
+            cleaned,
+            unit,
+            src,
+            distribution=distribution or "by_layer",
+            axis=axis or "k",
+            format_hint=format_hint,
+        )
+
+    def _parse_equals(self, R):
+        """
+        EQUALS block: KW value [I1 I2 J1 J2 K1 K2] /
+        If one row omits BOX, inherit the previous BOX.
+        """
+        reverse = self._build_array_keyword_reverse(include_unit=True)
         ni = R["grid"].get("ni", 1)
         nj = R["grid"].get("nj", 1)
         nk = R["grid"].get("nk", 1)
-        last_box = None   # ← 记住最后一次指定的 BOX
+        last_box = None
 
         while self._peek():
-            # EQUALS 每行必须以 'ARRAY_NAME' 引号 token 开头。
-            # 跳过所有非引号 token（LAYER、1、IS、TERMINATED 等噪声词）。
-            # 空 / 代表整个块结束。
-            while self._peek():
-                _, tok = self._peek()
-                if tok == "/":
-                    slash_lineno = self._peek()[0]
-                    self.pos += 1   # 消耗 /
-                    # 把同一行上 / 后面的残余 token 也消耗掉
-                    # （例如 "/  EQUALS IS TERMINATED BY A NULL RECORD"）
-                    while self._peek():
-                        ln2, tok2 = self._peek()
-                        if ln2 != slash_lineno:
-                            break
-                        self.pos += 1
-                    return
-                if tok.startswith("'"):
-                    break           # 引号括起的关键字 → 是真正的数据行
-                self.pos += 1       # 其他一切（数字/噪声词）均跳过
-
-            if not self._peek():
+            row, block_end = self._read_edit_record()
+            if block_end:
                 break
-
-            row = self._read_until_slash()
             if not row:
-                break
+                continue
 
-            kw_raw = row[0].strip("'").strip().upper()
+            kw_raw = self._normalize_edit_keyword(row[0])
             if kw_raw not in reverse:
                 continue
             section, key, unit = reverse[kw_raw]
 
-            nums = []
-            for t in row[1:]:
-                try:
-                    nums.append(_to_float(t))
-                except (ValueError, TypeError):
-                    pass
+            nums = self._row_numbers(row[1:])
             if not nums:
                 continue
 
             value = nums[0]
             src = f"EQUALS {kw_raw}"
+            box = self._extract_box(nums[1:], fallback_box=last_box)
+            if len(nums) >= 7 and box is not None:
+                last_box = box
 
-            # ── BOX 解析 ──────────────────────────────────────────────────────
-            # 本行有 6 个以上的数值 → 本行显式指定了 BOX
-            if len(nums) >= 7:
-                box = [int(x) for x in nums[1:7]]
-                last_box = box          # 更新"当前 BOX"
-            elif len(nums) >= 2:
-                # 有数值但不足 6 个：可能是 2~6 个，视作部分BOX或无BOX
-                # 安全起见：仅当恰好 6 个整数时才算 BOX，否则沿用 last_box
-                candidate = nums[1:]
-                if len(candidate) == 6 and all(float(x) == int(x) for x in candidate):
-                    box = [int(x) for x in candidate]
-                    last_box = box
+            if box and self._box_is_full_layer(box, ni, nj):
+                _, _, _, _, k1, k2 = box
+                vals_list = self._expand_obj_to_k_values(R[section].get(key), nk)
+                for k in range(max(k1 - 1, 0), min(k2, nk)):
+                    vals_list[k] = value
+                R[section][key] = self._collapse_k_values(
+                    vals_list,
+                    unit,
+                    src,
+                    distribution="by_layer" if nk > 1 else "constant",
+                    axis="k",
+                    format_hint={"keyword": "EQUALS", "box_scope": "full_layer"},
+                )
+            elif box and len(box) == 6:
+                if R[section].get(key) is None:
+                    R[section][key] = _scalar(
+                        value,
+                        unit,
+                        src + " BOX",
+                        distribution="constant",
+                        format_hint={"keyword": "EQUALS", "box_scope": "partial_box"},
+                    )
                 else:
-                    box = last_box      # 沿用上一行的 BOX
+                    self._record_unparsed(self._last_lineno(), f"EQUALS {kw_raw}", reason="partial box update not represented exactly")
             else:
-                box = last_box          # 无 BOX → 沿用上一行
-
-            # ── 写入 JSON ──────────────────────────────────────────────────────
-            if box and len(box) == 6:
-                i1, i2, j1, j2, k1, k2 = box
-                is_full_layer = (i1 == 1 and i2 == ni and j1 == 1 and j2 == nj)
-                if is_full_layer:
-                    # 按层写入 KVAR 数组
-                    existing = R[section].get(key)
-                    if existing and existing.get("type") == "array":
-                        vals_list = existing["values"][:]
-                    elif existing and existing.get("type") == "scalar":
-                        vals_list = [existing["value"]] * nk
-                    else:
-                        vals_list = [None] * nk
-                    for k in range(k1 - 1, min(k2, nk)):
-                        vals_list[k] = value
-                    vals_list = [v if v is not None else 0.0 for v in vals_list]
-                    if len(set(vals_list)) == 1:
-                        R[section][key] = _scalar(
-                            vals_list[0],
-                            unit,
-                            src,
-                            distribution="constant",
-                            format_hint={"keyword": "EQUALS", "box_scope": "full_layer"},
-                        )
-                    else:
-                        R[section][key] = _array(
-                            vals_list,
-                            unit,
-                            src,
-                            distribution="by_layer",
-                            axis="k",
-                            format_hint={"keyword": "EQUALS", "box_scope": "full_layer"},
-                        )
-                else:
-                    # 局部 BOX（非整层）→ 简单标量，不做精细网格展开
-                    if R[section].get(key) is None:
-                        R[section][key] = _scalar(
-                            value,
-                            unit,
-                            src + " BOX",
-                            distribution="constant",
-                            format_hint={"keyword": "EQUALS", "box_scope": "partial_box"},
-                        )
-            else:
-                # 没有任何 BOX 信息（包括 last_box 也是 None）→ 全场常数
                 R[section][key] = _scalar(
                     value,
                     unit,
@@ -664,60 +697,96 @@ class PetrelParser:
                 )
 
     def _parse_copy(self, R):
-        """COPY 'SRC' 'DST' /"""
-        kw_map_full = self._rl.petrel_kw_map()
-        reverse = {}
-        for kw, entry in kw_map_full.items():
-            if entry.get("format") == "array" and "json" in entry:
-                js = entry["json"]
-                reverse[kw.upper()] = (js["section"], js["key"])
-        reverse["PERMR"] = ("reservoir", "perm_i")
+        """COPY SRC DST [I1 I2 J1 J2 K1 K2] /"""
+        reverse = self._build_array_keyword_reverse(include_unit=False)
+        ni = R["grid"].get("ni", 1)
+        nj = R["grid"].get("nj", 1)
+        nk = R["grid"].get("nk", 1)
 
         while self._peek():
-            row = self._read_until_slash()
-            if not row:
+            row, block_end = self._read_edit_record()
+            if block_end:
                 break
-            if len(row) < 2:
+            if not row or len(row) < 2:
                 continue
-            src_kw = row[0].strip("'").upper()
-            dst_kw = row[1].strip("'").upper()
-            if src_kw in reverse and dst_kw in reverse:
-                s_sec, s_key = reverse[src_kw]
-                d_sec, d_key = reverse[dst_kw]
-                src_obj = R[s_sec].get(s_key)
-                if src_obj:
-                    import copy as _copy
-                    R[d_sec][d_key] = _copy.deepcopy(src_obj)
-                    R[d_sec][d_key]["source"] += f" (COPY {src_kw}→{dst_kw})"
+
+            src_kw = self._normalize_edit_keyword(row[0])
+            dst_kw = self._normalize_edit_keyword(row[1])
+            if src_kw not in reverse or dst_kw not in reverse:
+                continue
+
+            s_sec, s_key = reverse[src_kw]
+            d_sec, d_key = reverse[dst_kw]
+            src_obj = R[s_sec].get(s_key)
+            if not src_obj:
+                continue
+
+            box = self._extract_box(self._row_numbers(row[2:]))
+            if box and self._box_is_full_layer(box, ni, nj):
+                _, _, _, _, k1, k2 = box
+                src_vals = self._expand_obj_to_k_values(src_obj, nk)
+                dst_vals = self._expand_obj_to_k_values(R[d_sec].get(d_key), nk)
+                for k in range(max(k1 - 1, 0), min(k2, nk)):
+                    dst_vals[k] = src_vals[k]
+                R[d_sec][d_key] = self._collapse_k_values(
+                    dst_vals,
+                    src_obj.get("unit", ""),
+                    f"{src_obj.get('source', src_kw)} (COPY {src_kw}->{dst_kw})",
+                    distribution="by_layer" if nk > 1 else "constant",
+                    axis="k",
+                    format_hint={"keyword": "COPY", "box_scope": "full_layer"},
+                )
+            elif box and len(box) == 6:
+                self._record_unparsed(self._last_lineno(), f"COPY {src_kw} {dst_kw}", reason="partial box copy not represented exactly")
+            else:
+                R[d_sec][d_key] = copy.deepcopy(src_obj)
+                R[d_sec][d_key]["source"] = f"{src_obj.get('source', src_kw)} (COPY {src_kw}->{dst_kw})"
 
     def _parse_multiply(self, R):
-        """MULTIPLY 'KW' factor /"""
-        kw_map_full = self._rl.petrel_kw_map()
-        reverse = {}
-        for kw, entry in kw_map_full.items():
-            if entry.get("format") == "array" and "json" in entry:
-                js = entry["json"]
-                reverse[kw.upper()] = (js["section"], js["key"])
-        reverse["PERMR"] = ("reservoir", "perm_i")
+        """MULTIPLY KW factor [I1 I2 J1 J2 K1 K2] /"""
+        reverse = self._build_array_keyword_reverse(include_unit=False)
+        ni = R["grid"].get("ni", 1)
+        nj = R["grid"].get("nj", 1)
+        nk = R["grid"].get("nk", 1)
 
         while self._peek():
-            row = self._read_until_slash()
-            if not row:
+            row, block_end = self._read_edit_record()
+            if block_end:
                 break
-            if len(row) < 2:
+            if not row or len(row) < 2:
                 continue
-            kw_raw = row[0].strip("'").upper()
+
+            kw_raw = self._normalize_edit_keyword(row[0])
             if kw_raw not in reverse:
                 continue
             try:
                 factor = _to_float(row[1])
             except (ValueError, IndexError):
                 continue
+
             section, key = reverse[kw_raw]
             obj = R[section].get(key)
             if obj is None:
                 continue
-            if obj["type"] == "scalar":
+
+            box = self._extract_box(self._row_numbers(row[2:]))
+            if box and self._box_is_full_layer(box, ni, nj):
+                _, _, _, _, k1, k2 = box
+                vals = self._expand_obj_to_k_values(obj, nk)
+                for k in range(max(k1 - 1, 0), min(k2, nk)):
+                    if vals[k] is not None:
+                        vals[k] *= factor
+                R[section][key] = self._collapse_k_values(
+                    vals,
+                    obj.get("unit", ""),
+                    f"{obj.get('source', kw_raw)} (MULTIPLY {factor})",
+                    distribution="by_layer" if nk > 1 else "constant",
+                    axis="k",
+                    format_hint={"keyword": "MULTIPLY", "box_scope": "full_layer"},
+                )
+            elif box and len(box) == 6:
+                self._record_unparsed(self._last_lineno(), f"MULTIPLY {kw_raw}", reason="partial box multiply not represented exactly")
+            elif obj["type"] == "scalar":
                 obj["value"] *= factor
             elif obj["type"] == "array":
                 obj["values"] = [v * factor for v in obj["values"]]

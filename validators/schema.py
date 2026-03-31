@@ -4,8 +4,8 @@
 # =============================================================================
 
 from __future__ import annotations
-from typing import List, Optional, Literal, Union
-from pydantic import BaseModel, field_validator, model_validator, ValidationError
+from typing import Any, List, Optional, Literal, Union
+from pydantic import BaseModel, Field, field_validator, model_validator, ValidationError, ConfigDict
 from enum import Enum
 import warnings
 
@@ -63,9 +63,41 @@ class TableValue(BaseModel):
         return rows
 
 
+class RefValue(BaseModel):
+    type: Literal["ref"]
+    source_file: str
+    dataset: Optional[str] = None
+    format: Optional[str] = None
+    unit: Optional[str] = ""
+    confidence: float = 1.0
+    source: str = ""
+    required: bool = True
+    scale: Optional[float] = None
+    source_key: Optional[str] = None
+    source_format_hint: Optional[dict[str, Any]] = None
+
+
+class CaseDependencyItem(BaseModel):
+    kind: str
+    path: str
+    source_path: Optional[str] = None
+    exists: Optional[bool] = None
+    required: bool = True
+    line: Optional[int] = None
+
+
+class CaseManifestBlock(BaseModel):
+    root_file: str = ""
+    source_dir: str = ""
+    static_inputs: List[CaseDependencyItem] = Field(default_factory=list)
+    runtime_inputs: List[CaseDependencyItem] = Field(default_factory=list)
+    runtime_outputs: List[CaseDependencyItem] = Field(default_factory=list)
+
+
 # ── Meta ─────────────────────────────────────────────────────────────────────
 
 class MetaBlock(BaseModel):
+    model_config = ConfigDict(extra="allow")
     source_software: SourceSoftware
     source_file: str = ""
     unit_system: UnitSystem
@@ -79,9 +111,12 @@ class GridBlock(BaseModel):
     ni: Optional[int] = None
     nj: Optional[int] = None
     nk: Optional[int] = None
-    di: Optional[Union[ScalarValue, ArrayValue]] = None
-    dj: Optional[Union[ScalarValue, ArrayValue]] = None
-    dk: Optional[Union[ScalarValue, ArrayValue]] = None
+    di: Optional[Union[ScalarValue, ArrayValue, RefValue]] = None
+    dj: Optional[Union[ScalarValue, ArrayValue, RefValue]] = None
+    dk: Optional[Union[ScalarValue, ArrayValue, RefValue]] = None
+    active_cell_mask: Optional[Union[ScalarValue, ArrayValue, RefValue]] = None
+    pinchout_array: Optional[Union[ScalarValue, ArrayValue, RefValue]] = None
+    cell_activity_mode: Optional[str] = None
     depth_ref_block: Optional[ScalarValue] = None
 
     @field_validator("ni", "nj", "nk")
@@ -95,28 +130,30 @@ class GridBlock(BaseModel):
 # ── Reservoir ────────────────────────────────────────────────────────────────
 
 class ReservoirBlock(BaseModel):
-    porosity: Optional[Union[ScalarValue, ArrayValue]] = None
-    perm_i: Optional[Union[ScalarValue, ArrayValue]] = None
-    perm_j: Optional[Union[ScalarValue, ArrayValue]] = None
-    perm_k: Optional[Union[ScalarValue, ArrayValue]] = None
+    porosity: Optional[Union[ScalarValue, ArrayValue, RefValue]] = None
+    perm_i: Optional[Union[ScalarValue, ArrayValue, RefValue]] = None
+    perm_j: Optional[Union[ScalarValue, ArrayValue, RefValue]] = None
+    perm_k: Optional[Union[ScalarValue, ArrayValue, RefValue]] = None
     rock_compressibility: Optional[ScalarValue] = None
     rock_ref_pressure: Optional[ScalarValue] = None
 
-    @field_validator("porosity")
-    @classmethod
-    def check_porosity(cls, v):
-        if v is None: return v
-        vals = [v.value] if v.type == "scalar" else v.values
-        bad = [x for x in vals if not (0.0 < x <= 0.60)]
-        if bad:
-            raise ValueError(f"孔隙度超出范围(0, 0.60]，问题值: {bad[:5]}")
-        return v
+    @staticmethod
+    def _extract_numeric_values(v):
+        if v is None:
+            return []
+        if v.type == "scalar":
+            return [v.value]
+        if v.type == "array":
+            return v.values
+        return []
 
     @field_validator("perm_i", "perm_j", "perm_k")
     @classmethod
     def check_perm(cls, v):
         if v is None: return v
-        vals = [v.value] if v.type == "scalar" else v.values
+        vals = cls._extract_numeric_values(v)
+        if not vals:
+            return v
         bad = [x for x in vals if x < 0]
         if bad:
             raise ValueError(f"渗透率不能为负，问题值: {bad[:5]}")
@@ -198,8 +235,8 @@ class RockFluidBlock(BaseModel):
 class InitialBlock(BaseModel):
     ref_depth: Optional[ScalarValue] = None
     ref_pressure: Optional[ScalarValue] = None
-    bubble_point_pressure: Optional[Union[ScalarValue, ArrayValue]] = None
-    solvent_bubble_point_pressure: Optional[Union[ScalarValue, ArrayValue]] = None
+    bubble_point_pressure: Optional[Union[ScalarValue, ArrayValue, RefValue]] = None
+    solvent_bubble_point_pressure: Optional[Union[ScalarValue, ArrayValue, RefValue]] = None
     woc_depth: Optional[ScalarValue] = None
     goc_depth: Optional[ScalarValue] = None
 
@@ -265,6 +302,7 @@ class WellBlock(BaseModel):
 
 class UniversalModel(BaseModel):
     meta: MetaBlock
+    case_manifest: CaseManifestBlock = Field(default_factory=CaseManifestBlock)
     uda_version: str = "1.0.0"
     grid: Optional[GridBlock] = None
     reservoir: Optional[ReservoirBlock] = None
@@ -273,6 +311,64 @@ class UniversalModel(BaseModel):
     initial: Optional[InitialBlock] = None
     numerical: Optional[NumericalBlock] = None
     wells: List[WellBlock] = []
+
+    @staticmethod
+    def _extract_values(obj):
+        if obj is None:
+            return []
+        if getattr(obj, "type", None) == "scalar":
+            return [float(obj.value)]
+        if getattr(obj, "type", None) == "array":
+            return [float(v) for v in obj.values]
+        return []
+
+    @staticmethod
+    def _build_active_mask(grid):
+        if grid is None:
+            return []
+
+        active_values = UniversalModel._extract_values(getattr(grid, "active_cell_mask", None))
+        pinch_values = UniversalModel._extract_values(getattr(grid, "pinchout_array", None))
+        size = max(len(active_values), len(pinch_values))
+        if size == 0:
+            return []
+
+        mask = [True] * size
+        if active_values:
+            if len(active_values) == 1 and size > 1:
+                active_values = active_values * size
+            for idx, value in enumerate(active_values[:size]):
+                mask[idx] = mask[idx] and float(value) > 0.0
+        if pinch_values:
+            if len(pinch_values) == 1 and size > 1:
+                pinch_values = pinch_values * size
+            for idx, value in enumerate(pinch_values[:size]):
+                mask[idx] = mask[idx] and float(value) > 0.0
+        return mask
+
+    @model_validator(mode="after")
+    def validate_active_cell_physics(self):
+        reservoir = self.reservoir
+        if reservoir is None or reservoir.porosity is None:
+            return self
+
+        porosity_values = self._extract_values(reservoir.porosity)
+        if not porosity_values:
+            return self
+
+        active_mask = self._build_active_mask(self.grid)
+        bad = []
+        for idx, value in enumerate(porosity_values):
+            if value < 0.0 or value > 0.60:
+                bad.append(value)
+                continue
+            is_active = active_mask[idx] if idx < len(active_mask) else True
+            if value == 0.0 and is_active:
+                bad.append(value)
+
+        if bad:
+            raise ValueError(f"???????(0, 0.60]??Aactive cell ?? 0.0????: {bad[:5]}")
+        return self
 
     @model_validator(mode="after")
     def warn_missing_blocks(self):

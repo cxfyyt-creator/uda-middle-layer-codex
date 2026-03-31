@@ -10,13 +10,13 @@ from utils.project_paths import TMP_TESTS_DIR
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUTS_DIR = ROOT / "inputs" / "cmg"
+INPUTS_DIR = ROOT / "inputs" / "cmg" / "IMEX"
 TMP_DIR = TMP_TESTS_DIR / "cmg_source_faithful"
 
 
 class TestCMGSourceFaithfulRoundtrip(unittest.TestCase):
     def test_mxdrm001_roundtrip_preserves_original_deck(self):
-        src = INPUTS_DIR / "mxdrm001.dat"
+        src = INPUTS_DIR / "drm" / "mxdrm001.dat"
         raw = parse_cmg(src)
         deps = raw.get("meta", {}).get("_cmg_case_dependencies", {})
         self.assertEqual(deps.get("runtime_inputs", []), [])
@@ -27,7 +27,7 @@ class TestCMGSourceFaithfulRoundtrip(unittest.TestCase):
         self.assertEqual(content, expected)
 
     def test_mxdrm005_roundtrip_preserves_sip_and_vari_keywords(self):
-        src = INPUTS_DIR / "mxdrm005.dat"
+        src = INPUTS_DIR / "drm" / "mxdrm005.dat"
         raw = parse_cmg(src)
         deps = raw.get("meta", {}).get("_cmg_case_dependencies", {})
         self.assertEqual([item.get("path") for item in deps.get("runtime_inputs", [])], ["mxdrm005.sip"])
@@ -43,7 +43,7 @@ class TestCMGSourceFaithfulRoundtrip(unittest.TestCase):
         self.assertIn("*GRID *VARI 13 14 11", content)
 
     def test_missing_runtime_dependency_is_blocked(self):
-        src = INPUTS_DIR / "mxdrm005.dat"
+        src = INPUTS_DIR / "drm" / "mxdrm005.dat"
         tmpdir = TMP_DIR / "missing_runtime_case"
         if tmpdir.exists():
             shutil.rmtree(tmpdir)

@@ -622,6 +622,10 @@ def _scaled_value_object(obj: Dict[str, Any], scale: float, *, source: str, sour
         out["value"] = float(out.get("value", 0.0)) * scale
     elif t == "array":
         out["values"] = [float(v) * scale for v in (out.get("values") or [])]
+    elif t == "ref":
+        if abs(float(scale) - 1.0) >= 1e-12:
+            out["scale"] = float(scale)
+        out["source_key"] = source_key
     else:
         return out
 

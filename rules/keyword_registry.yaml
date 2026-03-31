@@ -138,6 +138,10 @@ cmg:
     "*DI":        {format: array, json: {section: grid, key: di}, unit: ft}
     "*DJ":        {format: array, json: {section: grid, key: dj}, unit: ft}
     "*DK":        {format: array, json: {section: grid, key: dk}, unit: ft}
+    "NULL":       {format: array, json: {section: grid, key: active_cell_mask}, unit: ""}
+    "*NULL":      {format: array, json: {section: grid, key: active_cell_mask}, unit: ""}
+    "PINCHOUTARRAY":  {format: array, json: {section: grid, key: pinchout_array}, unit: ""}
+    "*PINCHOUTARRAY": {format: array, json: {section: grid, key: pinchout_array}, unit: ""}
     "*DEPTH":     {format: depth}
     "*KDIR":      {format: custom, handler: _parse_kdir}
 
@@ -227,6 +231,8 @@ generators:
       di:       {keyword: "*DI", format: array}
       dj:       {keyword: "*DJ", format: array}
       dk:       {keyword: "*DK", format: array}
+      active_cell_mask: {keyword: "NULL", format: array}
+      pinchout_array: {keyword: "PINCHOUTARRAY", format: array}
       depth_ref_block: {keyword: "*DEPTH", format: depth_block}
       tops_ref: {keyword: null, format: depth_from_tops}
 

@@ -23,6 +23,9 @@ _NON_RUNTIME_HINTS = [
     re.compile(r"(?i)\*WRST\b"),
 ]
 
+_STATIC_INPUT_TYPES = {"SIPDATA-IN", "BINDATA-IN", "INCLUDE"}
+_RUNTIME_INPUT_TYPES = {"FLXB-IN"}
+
 
 def _strip_cmg_comments(line: str) -> str:
     text = str(line).rstrip()
@@ -32,6 +35,54 @@ def _strip_cmg_comments(line: str) -> str:
     if idx >= 0:
         text = text[:idx]
     return text.rstrip()
+
+
+def _normalize_dependency_type(value: str | None) -> str:
+    return str(value or "").upper().lstrip("*")
+
+
+def _normalize_case_item(entry: Dict[str, Any]) -> Dict[str, Any]:
+    kind = _normalize_dependency_type(entry.get("type"))
+    item = {
+        "kind": kind,
+        "path": entry.get("path", ""),
+        "source_path": entry.get("source_path"),
+        "exists": entry.get("exists"),
+        "required": bool(entry.get("required_for_runtime", True)),
+        "line": entry.get("line"),
+    }
+    for extra_key in (
+        "producer_case",
+        "producer_case_source_path",
+        "producer_case_exists",
+        "producer_artifact",
+    ):
+        if extra_key in entry:
+            item[extra_key] = entry.get(extra_key)
+    return item
+
+
+def _infer_runtime_producer(
+    dependency_type: str,
+    relpath: str,
+    source_dir: str | Path | None,
+) -> Dict[str, Any]:
+    kind = _normalize_dependency_type(dependency_type)
+    if kind != "FLXB-IN":
+        return {}
+
+    ref_path = Path(relpath)
+    stem = ref_path.stem
+    producer_case = f"{stem}.dat"
+    producer: Dict[str, Any] = {
+        "producer_case": producer_case,
+        "producer_artifact": f"{stem}_converted{ref_path.suffix}",
+    }
+    if source_dir is not None:
+        producer_case_path = Path(source_dir) / producer_case
+        producer["producer_case_source_path"] = str(producer_case_path)
+        producer["producer_case_exists"] = producer_case_path.exists()
+    return producer
 
 
 def scan_cmg_case_dependencies(raw_lines: List[str] | None, source_dir: str | Path | None = None) -> Dict[str, Any]:
@@ -76,6 +127,7 @@ def scan_cmg_case_dependencies(raw_lines: List[str] | None, source_dir: str | Pa
                         src_path = src_root / src_path
                     entry["source_path"] = str(src_path)
                     entry["exists"] = src_path.exists()
+                entry.update(_infer_runtime_producer(dependency_type, relpath, src_root))
                 runtime_inputs.append(entry)
                 matched_runtime = True
 
@@ -99,3 +151,62 @@ def scan_cmg_case_dependencies(raw_lines: List[str] | None, source_dir: str | Pa
         "ignored_lines": ignored_lines,
         "missing_runtime_inputs": missing_runtime_inputs,
     }
+
+
+def build_cmg_case_manifest(
+    filepath: str | Path | None,
+    dependencies: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    path = Path(filepath) if filepath else None
+    deps = dependencies or {}
+    manifest: Dict[str, Any] = {
+        "root_file": path.name if path else "",
+        "source_dir": str(path.parent) if path else "",
+        "static_inputs": [],
+        "runtime_inputs": [],
+        "runtime_outputs": [],
+    }
+
+    for raw_item in deps.get("runtime_inputs", []) or []:
+        item = _normalize_case_item(raw_item)
+        kind = item.get("kind", "")
+        if kind in _STATIC_INPUT_TYPES:
+            manifest["static_inputs"].append(item)
+        elif kind in _RUNTIME_INPUT_TYPES:
+            manifest["runtime_inputs"].append(item)
+        else:
+            manifest["runtime_inputs"].append(item)
+
+    return manifest
+
+
+def collect_case_input_files(data: Dict[str, Any] | None) -> List[Dict[str, Any]]:
+    if not isinstance(data, dict):
+        return []
+
+    manifest = data.get("case_manifest", {}) or {}
+    items: List[Dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    for bucket in ("static_inputs", "runtime_inputs"):
+        for raw_item in manifest.get(bucket, []) or []:
+            item = _normalize_case_item(raw_item)
+            key = (str(item.get("kind", "")), str(item.get("path", "")))
+            if key in seen or not item.get("path"):
+                continue
+            seen.add(key)
+            items.append(item)
+
+    if items:
+        return items
+
+    meta = data.get("meta", {}) or {}
+    deps = meta.get("_cmg_case_dependencies", {}) or {}
+    for raw_item in deps.get("runtime_inputs", []) or []:
+        item = _normalize_case_item(raw_item)
+        key = (str(item.get("kind", "")), str(item.get("path", "")))
+        if key in seen or not item.get("path"):
+            continue
+        seen.add(key)
+        items.append(item)
+    return items

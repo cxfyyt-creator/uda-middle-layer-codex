@@ -10,6 +10,7 @@ class StandardModel:
 
     uda_version: str = "1.0.0"
     meta: Dict[str, Any] = field(default_factory=dict)
+    case_manifest: Dict[str, Any] = field(default_factory=dict)
     grid: Dict[str, Any] = field(default_factory=dict)
     reservoir: Dict[str, Any] = field(default_factory=dict)
     fluid: Dict[str, Any] = field(default_factory=dict)
@@ -24,6 +25,7 @@ class StandardModel:
         return {
             "uda_version": self.uda_version,
             "meta": self.meta,
+            "case_manifest": self.case_manifest,
             "grid": self.grid,
             "reservoir": self.reservoir,
             "fluid": self.fluid,

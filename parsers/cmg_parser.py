@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.rule_loader import get_loader
 from utils.reporting import write_report_bundle
-from utils.cmg_case_dependencies import scan_cmg_case_dependencies
+from utils.cmg_case_dependencies import build_cmg_case_manifest, scan_cmg_case_dependencies
 from utils.project_paths import JSON_OUTPUT_DIR, PARSER_REPORTS_DIR
 from utils.pvt_metadata import apply_pvt_role
 from utils.value_semantics import apply_value_semantics
@@ -27,6 +27,7 @@ _LINE_IGNORE_KWS = {
     "*RESULTS", "*WPRN", "*OUTPRN", "*WSRF", "*OUTSRF",
     "*MONITOR", "*GROUP", "*AIMWELL", "*AIMGROUP", "*OUTDIARY",
 }
+_STARLESS_TOP_LEVEL_KWS = {"FILENAMES"}
 
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
 
@@ -85,11 +86,13 @@ class CMGParser:
         self.pos = 0
         self.raw_lines = []
         self._rl = get_loader()
+        self._cmg_kw_keys = set(self._rl.cmg_kw_map().keys())
         self.logger = logging.getLogger(__name__)
         self.unparsed_blocks = []
         self.active_well_indices = []
         self.last_geometry = None
         self.default_geometry = None
+        self._case_dependencies = {}
 
     # ── Token 管理 ────────────────────────────────────────────────────────────
 
@@ -168,13 +171,86 @@ class CMGParser:
             return True
         return self.tokens[i][0] != self.tokens[i - 1][0]
 
+    def _normalize_top_level_keyword(self, tok):
+        tok_u = str(tok or "").upper()
+        if not tok_u:
+            return tok_u
+        if tok_u in {"RUN", "RESULTS", "SIMULATOR", "IMEX"}:
+            return tok_u
+        if tok_u.startswith("*"):
+            return tok_u
+        alias = f"*{tok_u}"
+        if alias in self._cmg_kw_keys:
+            return alias
+        return tok_u
+
+    def _normalize_inline_token(self, tok):
+        tok_u = str(tok or "").upper()
+        return tok_u.lstrip("*")
+
+    def _current_keyword_token(self):
+        if self.pos <= 0:
+            return ""
+        return str(self.tokens[self.pos - 1][1])
+
+    def _resolve_external_source_file(self, dependency_kind):
+        dependency_kind = str(dependency_kind or "").upper()
+        meta = getattr(self, "_case_dependencies", {}) or {}
+        for item in meta.get("runtime_inputs", []) or []:
+            item_type = str(item.get("type", "")).upper().lstrip("*")
+            if item_type == dependency_kind:
+                return item.get("path")
+        return None
+
+    def _peek_external_ref(self, unit, src):
+        t = self._peek()
+        if not t:
+            return None
+        token = self._normalize_inline_token(t[1])
+        dependency_kind = None
+        if token == "SIP_DATA":
+            dependency_kind = "SIPDATA-IN"
+        elif token == "BINARY_DATA":
+            dependency_kind = "BINDATA-IN"
+        if not dependency_kind:
+            return None
+
+        keyword = self._normalize_inline_token(self._current_keyword_token())
+        self.pos += 1
+        source_file = self._resolve_external_source_file(dependency_kind)
+        return apply_value_semantics(
+            {
+                "type": "ref",
+                "source_file": source_file or "",
+                "dataset": keyword,
+                "format": token,
+                "unit": unit,
+                "confidence": 0.99,
+                "source": src,
+                "required": True,
+                "source_format_hint": {
+                    "software": "cmg_imex",
+                    "keyword": token,
+                    "dependency_kind": dependency_kind,
+                },
+            },
+            value_type="ref",
+            software="cmg_imex",
+        )
+
     def _is_top_level_kw_token(self, tok, *, off=0):
         if not tok:
             return False
-        tok_u = str(tok).upper()
+        tok_u = self._normalize_top_level_keyword(tok)
         if tok_u in {"RUN", "RESULTS", "SIMULATOR", "IMEX"}:
             return self._is_line_first_token(off=off)
-        return _is_kw(tok) and self._is_line_first_token(off=off)
+        if _is_kw(tok) and self._is_line_first_token(off=off):
+            return True
+        if self._is_line_first_token(off=off):
+            raw_u = str(tok).upper()
+            if tok_u in self._cmg_kw_keys or raw_u in _STARLESS_TOP_LEVEL_KWS:
+                return True
+        return False
 
     def _peek_next_top_level_kw(self):
         off = 0
@@ -316,8 +392,9 @@ class CMGParser:
         if not t:
             return None
         _, tok = t
-        if tok.upper() in ("*CON", "*KVAR", "*IVAR", "*JVAR", "*ALL", "*IJK"):
-            return tok.upper()
+        token = self._normalize_inline_token(tok)
+        if token in ("CON", "KVAR", "IVAR", "JVAR", "ALL", "IJK"):
+            return f"*{token}"
         return None
 
     def _infer_equalsi_source_key(self, section, key):
@@ -328,7 +405,7 @@ class CMGParser:
 
     def _peek_equalsi_relation(self, section, key, unit, src):
         t = self._peek()
-        if not t or str(t[1]).upper() != "*EQUALSI":
+        if not t or self._normalize_inline_token(t[1]) != "EQUALSI":
             return None
 
         source_key = self._infer_equalsi_source_key(section, key)
@@ -377,6 +454,11 @@ class CMGParser:
             R[section][key] = relation
             return
 
+        external_ref = self._peek_external_ref(unit, src)
+        if external_ref is not None:
+            R[section][key] = external_ref
+            return
+
         mod = self._peek_modifier()
         if mod:
             self.pos += 1
@@ -416,7 +498,7 @@ class CMGParser:
         _, tok = t
         if _is_kw(tok):
             return
-        if tok.upper() == "*CON":
+        if self._normalize_inline_token(tok) == "CON":
             self.pos += 1
             vals = self._read_floats()
             if vals:
@@ -1074,27 +1156,33 @@ class CMGParser:
             "_current_time": 0.0,
         }
 
+        self._case_dependencies = (
+            scan_cmg_case_dependencies(self.raw_lines, self.filepath.parent)
+            if self.raw_lines else {}
+        )
+
         in_run_section = False
         unknown_keys = []
 
         while self._peek():
             lineno, tok = self._next()
             u = tok.upper()
+            u_dispatch = self._normalize_top_level_keyword(tok) if self._is_line_first_token(off=-1) else u
 
-            if u in {'*RUN', 'RUN'}:
+            if u_dispatch in {'*RUN', 'RUN'}:
                 in_run_section = True
                 continue
 
-            if u in ignore_set:
+            if u_dispatch in ignore_set:
                 self._skip_same_line_tokens(lineno)
                 continue
 
-            if u in _LINE_IGNORE_KWS or u in {'RESULTS', 'SIMULATOR', 'IMEX', '*WELLNN', '*WELLN'}:
+            if u_dispatch in _LINE_IGNORE_KWS or u_dispatch in {'RESULTS', 'SIMULATOR', 'IMEX', '*WELLNN', '*WELLN'}:
                 self._skip_same_line_tokens(lineno)
                 continue
 
-            if u in kw_map:
-                entry = kw_map[u]
+            if u_dispatch in kw_map:
+                entry = kw_map[u_dispatch]
                 fmt = entry["format"]
 
                 if fmt == "array":
@@ -1144,8 +1232,8 @@ class CMGParser:
                 else:
                     self._consume_unknown_inline(lineno, tok)
 
-                if _is_kw(tok) and u not in unknown_keys:
-                    unknown_keys.append(u)
+                if (u_dispatch.startswith("*") or _is_kw(tok)) and u_dispatch not in unknown_keys:
+                    unknown_keys.append(u_dispatch)
 
         if unknown_keys:
             R["unknown_keywords"] = {k: [] for k in unknown_keys}
@@ -1157,10 +1245,12 @@ class CMGParser:
             R["meta"]["_cmg_roundtrip_mode"] = "source_faithful"
             R["meta"]["_cmg_raw_deck_lines"] = list(self.raw_lines)
             R["meta"]["_cmg_source_dir"] = str(self.filepath.parent)
-            R["meta"]["_cmg_case_dependencies"] = scan_cmg_case_dependencies(
+            self._case_dependencies = scan_cmg_case_dependencies(
                 self.raw_lines,
                 self.filepath.parent,
             )
+            R["meta"]["_cmg_case_dependencies"] = self._case_dependencies
+            R["case_manifest"] = build_cmg_case_manifest(self.filepath, self._case_dependencies)
 
         R.pop("_current_time", None)
         return R

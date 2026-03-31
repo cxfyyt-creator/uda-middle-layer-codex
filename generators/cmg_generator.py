@@ -13,7 +13,7 @@ from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.confidence_checks import evaluate_confidence
-from utils.cmg_case_dependencies import scan_cmg_case_dependencies
+from utils.cmg_case_dependencies import collect_case_input_files, scan_cmg_case_dependencies
 from utils.project_paths import CMG_OUTPUT_DIR, GENERATOR_REPORTS_DIR, JSON_OUTPUT_DIR
 from utils.rule_loader import get_loader
 from utils.reporting import write_report_bundle
@@ -68,6 +68,21 @@ def _get_equalsi_scale(obj):
         return float(hint.get("scale", 1.0) or 1.0)
     return None
 
+
+def _get_ref_write_mode(obj):
+    if not isinstance(obj, dict) or obj.get("type") != "ref":
+        return None
+    hint = obj.get("source_format_hint") or {}
+    hint_keyword = str(hint.get("keyword", "")).upper()
+    if hint_keyword == "*EQUALSI":
+        scale = hint.get("scale", obj.get("scale", 1.0))
+        return {"mode": "equalsi", "scale": float(scale or 1.0)}
+
+    ref_format = str(obj.get("format", "")).upper()
+    if ref_format in {"SIP_DATA", "BINARY_DATA"}:
+        return {"mode": "external_dataset", "format": ref_format}
+    return None
+
 # ── CMG 数组写入 ──────────────────────────────────────────────────────────────
 
 def _write_array(lines, keyword, obj):
@@ -75,6 +90,23 @@ def _write_array(lines, keyword, obj):
     if obj is None:
         return
     t = obj.get("type") if isinstance(obj, dict) else None
+    if t == "ref":
+        ref_mode = _get_ref_write_mode(obj)
+        if not ref_mode:
+            raise ValueError(
+                f"Structured CMG writer does not yet support ref value for {keyword}: "
+                f"{obj.get('format') or 'UNKNOWN'} -> {obj.get('source_file') or '<unknown>'}"
+            )
+        if ref_mode["mode"] == "equalsi":
+            scale = float(ref_mode.get("scale", 1.0) or 1.0)
+            if abs(scale - 1.0) < 1e-12:
+                lines.append(f"{keyword} *EQUALSI")
+            else:
+                lines.append(f"{keyword} *EQUALSI * {_fmt(scale).strip()}")
+            return
+        if ref_mode["mode"] == "external_dataset":
+            lines.append(f"{keyword} {ref_mode['format']}")
+            return
     equalsi_scale = _get_equalsi_scale(obj)
     if equalsi_scale is not None:
         if abs(equalsi_scale - 1.0) < 1e-12:
@@ -151,11 +183,17 @@ class CMGGenerator:
             return None
         return text + "\n"
 
-    def _runtime_alias_candidates(self, ref):
+    def _runtime_alias_candidates(self, ref, item=None):
         ref_path = Path(ref)
-        if not ref_path.suffix:
-            return []
-        return [ref_path.with_name(f"{ref_path.stem}_converted{ref_path.suffix}")]
+        candidates = []
+        producer_artifact = item.get("producer_artifact") if isinstance(item, dict) else None
+        if producer_artifact:
+            candidates.append(Path(producer_artifact))
+        if ref_path.suffix:
+            default_candidate = ref_path.with_name(f"{ref_path.stem}_converted{ref_path.suffix}")
+            if default_candidate not in candidates:
+                candidates.append(default_candidate)
+        return candidates
 
     def _materialize_runtime_inputs(self, data, output_file):
         summary = {
@@ -171,12 +209,15 @@ class CMGGenerator:
         meta = data.get("meta", {}) or {}
         raw_lines = meta.get("_cmg_raw_deck_lines")
         source_dir = meta.get("_cmg_source_dir")
-        if not raw_lines:
+        dst_root = Path(output_file).parent
+        input_items = collect_case_input_files(data)
+        if not input_items and raw_lines:
+            deps = meta.get("_cmg_case_dependencies") or scan_cmg_case_dependencies(raw_lines, source_dir)
+            input_items = collect_case_input_files({"meta": {"_cmg_case_dependencies": deps}})
+        if not input_items:
             return summary
 
-        dst_root = Path(output_file).parent
-        deps = meta.get("_cmg_case_dependencies") or scan_cmg_case_dependencies(raw_lines, source_dir)
-        for item in deps.get("runtime_inputs", []):
+        for item in input_items:
             ref = item.get("path")
             if not ref:
                 continue
@@ -200,7 +241,7 @@ class CMGGenerator:
                 continue
 
             aliased = False
-            for candidate_rel in self._runtime_alias_candidates(ref):
+            for candidate_rel in self._runtime_alias_candidates(ref, item):
                 candidate_path = dst_root / candidate_rel
                 if not candidate_path.exists():
                     continue
@@ -221,6 +262,37 @@ class CMGGenerator:
     def _copy_external_file_refs(self, data, output_file):
         return self._materialize_runtime_inputs(data, output_file)
 
+    def _write_case_manifest_inputs(self, lines, case_manifest):
+        if not isinstance(case_manifest, dict):
+            return
+
+        mapping = {
+            "SIPDATA-IN": "SIPDATA-IN",
+            "BINDATA-IN": "BINDATA-IN",
+            "INCLUDE": "INCLUDE",
+        }
+        emitted = set()
+        manifest_lines = []
+        for item in case_manifest.get("static_inputs", []) or []:
+            if not isinstance(item, dict):
+                continue
+            kind = str(item.get("kind", "")).upper()
+            path = str(item.get("path", "")).strip()
+            cmg_kind = mapping.get(kind)
+            if not cmg_kind or not path:
+                continue
+            key = (cmg_kind, path)
+            if key in emitted:
+                continue
+            emitted.add(key)
+            manifest_lines.append(f"FILENAMES {cmg_kind} '{path}'")
+
+        if not manifest_lines:
+            return
+
+        lines.extend(manifest_lines)
+        lines.append("")
+
     def generate(self, data):
         preserved = self._preserved_cmg_deck(data)
         if preserved is not None:
@@ -228,6 +300,7 @@ class CMGGenerator:
 
         lines = []
         meta      = data.get("meta", {})
+        case_manifest = data.get("case_manifest", {})
         grid      = data.get("grid", {})
         reservoir = data.get("reservoir", {})
         fluid     = data.get("fluid", {})
@@ -258,6 +331,7 @@ class CMGGenerator:
             "*OUTSRF *GRID *ALL",
             "",
         ]
+        self._write_case_manifest_inputs(lines, case_manifest)
 
         # ── GRID ──────────────────────────────────────────────────────────────
         lines.append("** ============================================================")
@@ -430,6 +504,11 @@ class CMGGenerator:
                     out_obj["type"] = "array"
                     out_obj["values"] = reorder_k_array(val, reverse_k)
                 _write_array(lines, kw, out_obj)
+
+        if grid.get("active_cell_mask") is not None:
+            _write_array(lines, "NULL", grid.get("active_cell_mask"))
+        if grid.get("pinchout_array") is not None:
+            _write_array(lines, "PINCHOUTARRAY", grid.get("pinchout_array"))
 
         depth_obj = grid.get("depth_ref_block") or compute_depth_from_tops(
             grid, strategy="default" if reverse_k else "kdir_down"
@@ -767,13 +846,27 @@ def generate_cmg(data_or_json, output_file=None, report_dir=GENERATOR_REPORTS_DI
     effective_preflight_blockers = list(preflight["blockers"])
     if source_faithful:
         resolved_runtime_paths = set(runtime_resolution.get("resolved_paths", []))
-        effective_preflight_blockers = [
-            item for item in effective_preflight_blockers
-            if (
-                str(item).startswith("missing required CMG runtime input:")
-                and str(item).split(": ", 1)[-1] not in resolved_runtime_paths
-            )
-        ]
+
+        def _runtime_path_from_blocker(text):
+            prefix = "missing required CMG runtime input: "
+            raw = str(text)
+            if not raw.startswith(prefix):
+                return None
+            path = raw[len(prefix):]
+            if " (" in path:
+                path = path.split(" (", 1)[0]
+            return path
+
+        effective_preflight_blockers = []
+        for item in preflight.get("issues", []):
+            if item.get("severity") != "blocker":
+                continue
+            message = str(item.get("message", ""))
+            if not message.startswith("missing required CMG runtime input:"):
+                continue
+            if _runtime_path_from_blocker(message) in resolved_runtime_paths:
+                continue
+            effective_preflight_blockers.append(message)
 
     if effective_preflight_blockers:
         _write_failed_report(effective_preflight_blockers, warnings=preflight["warnings"])
@@ -802,10 +895,11 @@ def generate_cmg(data_or_json, output_file=None, report_dir=GENERATOR_REPORTS_DI
     wells = data.get("wells", []) if isinstance(data, dict) else []
     meta = data.get("meta", {}) if isinstance(data, dict) else {}
     deps = meta.get("_cmg_case_dependencies", {}) if isinstance(meta, dict) else {}
+    case_manifest = data.get("case_manifest", {}) if isinstance(data, dict) else {}
     if not wells:
         warnings.append("no wells found; WELL DATA section may be empty")
-    runtime_inputs = deps.get("runtime_inputs", []) or []
-    missing_runtime = deps.get("missing_runtime_inputs", []) or []
+    runtime_inputs = collect_case_input_files(data) if isinstance(data, dict) else []
+    missing_runtime = [item for item in runtime_inputs if item.get("exists") is False]
     if runtime_resolution["resolved_paths"]:
         resolved = set(runtime_resolution["resolved_paths"])
         missing_runtime = [item for item in missing_runtime if item.get("path") not in resolved]
@@ -842,6 +936,7 @@ def generate_cmg(data_or_json, output_file=None, report_dir=GENERATOR_REPORTS_DI
             "has_pvto_table": bool(data.get("fluid", {}).get("pvto_table")) if isinstance(data, dict) else False,
             "has_pvdg_table": bool(data.get("fluid", {}).get("pvdg_table")) if isinstance(data, dict) else False,
             "has_pvt_table": bool(data.get("fluid", {}).get("pvt_table")) if isinstance(data, dict) else False,
+            "case_manifest": case_manifest if isinstance(data, dict) else {},
             "case_dependencies": deps if isinstance(data, dict) else {},
             "runtime_resolution": runtime_resolution,
             "preflight": preflight,

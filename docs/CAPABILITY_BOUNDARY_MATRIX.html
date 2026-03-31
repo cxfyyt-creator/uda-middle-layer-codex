@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>能力边界矩阵 2026-03-31</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.6; color: #1a1a1a; background: #f9f8f6; padding: 32px 24px 64px; }
+.page { max-width: 1280px; margin: 0 auto; }
+h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+.subtitle { color: #666; font-size: 13px; margin-bottom: 24px; }
+h2 { font-size: 16px; font-weight: 600; margin: 32px 0 12px; color: #1a1a1a; }
+h3 { font-size: 14px; font-weight: 600; margin: 20px 0 8px; color: #444; }
+p { color: #444; font-size: 13px; line-height: 1.7; margin-bottom: 8px; }
+ul { padding-left: 18px; color: #444; }
+li { margin-bottom: 6px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 12px; white-space: nowrap; }
+.b-full    { background: #d4edda; color: #155724; }
+.b-faithful{ background: #cce5ff; color: #004085; }
+.b-partial { background: #fff3cd; color: #856404; }
+.b-fail    { background: #f8d7da; color: #721c24; }
+.b-fmt     { background: #e2d9f3; color: #4a1d96; }
+.b-ir      { background: #d1ecf1; color: #0c5460; }
+.b-gen     { background: #fde8d8; color: #7d3c1a; }
+.b-val     { background: #ffeeba; color: #856404; }
+
+.table-wrap { overflow-x: auto; margin-bottom: 24px; border-radius: 8px; border: 1px solid #e0ddd6; }
+table { width: 100%; border-collapse: collapse; background: #fff; font-size: 12.5px; }
+thead th { background: #f1efe8; font-weight: 600; color: #333; padding: 10px 12px; text-align: left; border-bottom: 1px solid #d8d6ce; white-space: nowrap; }
+tbody tr { border-bottom: 1px solid #f0ede6; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: #fdfcf9; }
+td { padding: 9px 12px; color: #333; vertical-align: top; }
+td code, .appendix-list code { background: #f1efe8; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; font-family: "SF Mono", "Fira Code", monospace; color: #555; }
+
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; flex-shrink: 0; }
+.dot-full    { background: #28a745; }
+.dot-faithful{ background: #17a2b8; }
+.dot-partial { background: #ffc107; }
+.dot-fail    { background: #dc3545; }
+.status-cell { display: flex; align-items: flex-start; gap: 4px; }
+
+.cap-stable { color: #155724; font-weight: 500; }
+.cap-unstable { color: #856404; font-weight: 500; }
+.cap-fail { color: #721c24; font-weight: 500; }
+.cap-missing { color: #4a1d96; font-weight: 500; }
+
+.conclusion { background: #fff; border: 1px solid #e0ddd6; border-left: 4px solid #495057; border-radius: 8px; padding: 16px 20px; margin: 24px 0; }
+.conclusion p { margin: 0; font-size: 13.5px; color: #333; }
+
+.appendix-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.small { color: #777; font-size: 12px; }
+
+@media print {
+  body { background: white; padding: 16px; }
+  .table-wrap { border: 1px solid #ccc; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>能力边界矩阵</h1>
+<div class="subtitle">截至 2026-03-31 · 本页已纳入 2026-03-31 14:20:18 的 IR 升级 v1.0 更新（ref / case_manifest）</div>
+
+<h2>更新记录</h2>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th style="width:16%">时间</th>
+      <th style="width:42%">更新内容</th>
+      <th style="width:42%">结论变化</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2026-03-30</td>
+      <td>建立首版能力边界矩阵，统一状态口径、原因类型、下一步任务。</td>
+      <td>矩阵从零散讨论变成正式决策文档。</td>
+    </tr>
+    <tr>
+      <td>2026-03-31</td>
+      <td>补充 CMG <code>spe/cmb/drm/flu/frr/geo</code> 与 Petrel 全量 <code>DATA</code> 批量转换结果。</td>
+      <td>当前成功面、失败面、边界面第一次被系统整理。</td>
+    </tr>
+    <tr>
+      <td>2026-03-31 14:20:18</td>
+      <td>纳入 IR 升级 v1.0：新增 <code>ref</code>、<code>case_manifest</code>，并让 preflight / generator 初步兼容。</td>
+      <td><code>mxdrm005</code> 从“IR 表达缺失”推进到“结构化生成器能力不足”；<code>mxgeo008/010/012</code> 从“依赖无正式落点”推进到“运行时装配/生成器能力问题”。</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>状态与原因图例</h2>
+<div class="legend">
+  <span class="badge b-full"><span class="dot dot-full"></span>完整成功</span>
+  <span class="badge b-faithful"><span class="dot dot-faithful"></span>保真成功</span>
+  <span class="badge b-partial"><span class="dot dot-partial"></span>部分成功</span>
+  <span class="badge b-fail"><span class="dot dot-fail"></span>失败</span>
+  <span style="width:1px;background:#ddd;margin:0 4px"></span>
+  <span class="badge b-fmt">格式覆盖</span>
+  <span class="badge b-ir">IR表达</span>
+  <span class="badge b-gen">生成器能力</span>
+  <span class="badge b-val">校验规则</span>
+</div>
+
+<h2>1 · 案例视图矩阵</h2>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th style="width:18%">案例</th>
+      <th style="width:12%">方向</th>
+      <th style="width:12%">当前状态</th>
+      <th style="width:22%">当前主要缺口</th>
+      <th style="width:12%">原因类型</th>
+      <th style="width:24%">最新备注</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>mxspe001/002/005/009/010</code></td>
+      <td>CMG → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-full"></span>完整成功</div></td>
+      <td>-</td>
+      <td>-</td>
+      <td>基础黑油往返稳定。</td>
+    </tr>
+    <tr>
+      <td><code>mxcmb001-004</code></td>
+      <td>CMG → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
+      <td>仍主要依赖保真回写。</td>
+      <td>-</td>
+      <td>2026-03-31 批量 4/4 成功。</td>
+    </tr>
+    <tr>
+      <td><code>mxdrm001-004,006-009</code></td>
+      <td>CMG → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
+      <td>仍主要依赖保真回写。</td>
+      <td>-</td>
+      <td>2026-03-31 批量 8/8 成功。</td>
+    </tr>
+    <tr>
+      <td><code>mxdrm005</code></td>
+      <td>CMG → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
+      <td><code>ref</code> 已进入 IR，但 structured writer 还不会展开 / 写回。</td>
+      <td><span class="badge b-gen">生成器能力</span></td>
+      <td><code>SIP_DATA</code> 已能解析成 <code>ref</code>，<code>case_manifest</code> 已能正式记录 <code>mxdrm005.sip</code>。</td>
+    </tr>
+    <tr>
+      <td><code>mxflu002-006</code></td>
+      <td>CMG → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
+      <td>仍主要依赖保真回写。</td>
+      <td>-</td>
+      <td>2026-03-31 批量 5/5 成功。</td>
+    </tr>
+    <tr>
+      <td><code>mxfrr001-031</code></td>
+      <td>CMG → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
+      <td>仍主要依赖保真回写。</td>
+      <td>-</td>
+      <td>2026-03-31 批量 31/31 成功。</td>
+    </tr>
+    <tr>
+      <td><code>mxnwp001-007</code></td>
+      <td>CMG → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
+      <td>仍主要依赖保真回写。</td>
+      <td>-</td>
+      <td>用户已反馈运行成功。</td>
+    </tr>
+    <tr>
+      <td><code>mxhrw001-008</code></td>
+      <td>CMG → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
+      <td>仍主要依赖保真回写。</td>
+      <td>-</td>
+      <td>用户已反馈运行成功。</td>
+    </tr>
+    <tr>
+      <td><code>mxgeo001-007,009,011</code></td>
+      <td>CMG → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
+      <td>仍主要依赖保真回写。</td>
+      <td>-</td>
+      <td>2026-03-31 批量成功。</td>
+    </tr>
+    <tr>
+      <td><code>mxgeo004/006</code></td>
+      <td>CMG → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功但结构化不稳</div></td>
+      <td>null block / 零孔隙度块校验仍偏硬。</td>
+      <td><span class="badge b-val">校验规则</span></td>
+      <td>active/null 语义仍未正式打通。</td>
+    </tr>
+    <tr>
+      <td><code>mxgeo008/010/012</code></td>
+      <td>CMG → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-fail"></span>失败</div></td>
+      <td><code>FLXB-IN</code> 依赖虽已进入 <code>case_manifest</code>，但运行时装配仍未彻底工程化。</td>
+      <td><span class="badge b-gen">生成器能力</span></td>
+      <td>问题已从“IR 无法表达依赖”推进到“生成器 / 装配层未完全解决”。</td>
+    </tr>
+    <tr>
+      <td><code>SPE1_ODEHIMPES / SPE1_ODEHIMPLI / SPE2_CHAP / SPE2_CHAPLOAD / SPE2_CHAPRST / SPE5_MISCIBLE / SPE6_FRAC / SPE9</code></td>
+      <td>Petrel / Eclipse → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-full"></span>完整成功</div></td>
+      <td>-</td>
+      <td>-</td>
+      <td>当前基础成功面。</td>
+    </tr>
+    <tr>
+      <td><code>BIG3D3P</code></td>
+      <td>Petrel / Eclipse → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
+      <td><code>ACTNUM</code> 等语义尚未完全结构化。</td>
+      <td><span class="badge b-fmt">格式覆盖</span></td>
+      <td>能跑，但还不是完全工程化支持。</td>
+    </tr>
+    <tr>
+      <td><code>BASE_WATER</code></td>
+      <td>Petrel / Eclipse → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-partial"></span>部分成功</div></td>
+      <td><code>DXV/DYV</code>、<code>GRAVITY</code>、<code>PVDO+PVDG</code> 链路未补齐。</td>
+      <td><span class="badge b-fmt">格式覆盖</span></td>
+      <td><code>EQUALS/COPY/MULTIPLY</code> 已修，问题已缩小。</td>
+    </tr>
+    <tr>
+      <td><code>ALKALINE_ASP</code></td>
+      <td>Petrel / Eclipse → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-fail"></span>失败</div></td>
+      <td>化学模型目标链路未建立。</td>
+      <td><span class="badge b-gen">生成器能力</span></td>
+      <td>不是简单补字段问题。</td>
+    </tr>
+    <tr>
+      <td><code>API_INJ</code></td>
+      <td>Petrel / Eclipse → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-fail"></span>失败</div></td>
+      <td><code>COORD/ZCORN</code> corner-point 路径未建立。</td>
+      <td><span class="badge b-fmt">格式覆盖</span></td>
+      <td>同时伴随 API 相关语义缺口。</td>
+    </tr>
+    <tr>
+      <td><code>API_TRACK</code></td>
+      <td>Petrel / Eclipse → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-fail"></span>失败</div></td>
+      <td>API tracking 目标语义未建立。</td>
+      <td><span class="badge b-gen">生成器能力</span></td>
+      <td>不是短期小修可解。</td>
+    </tr>
+    <tr>
+      <td><code>BRILLIG / BRILLIG_ACTIONG / BRILLIG_HYSTER / BRILLRST</code></td>
+      <td>Petrel / Eclipse → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-fail"></span>失败</div></td>
+      <td><code>COORD/ZCORN</code> + active/null 语义均未稳定。</td>
+      <td><span class="badge b-fmt">格式覆盖</span></td>
+      <td>其中还夹杂校验层误杀问题。</td>
+    </tr>
+    <tr>
+      <td><code>BRINETRACER</code></td>
+      <td>Petrel / Eclipse → CMG</td>
+      <td><div class="status-cell"><span class="dot dot-fail"></span>失败</div></td>
+      <td>corner-point + tracer / salt 复合语义未建立。</td>
+      <td><span class="badge b-gen">生成器能力</span></td>
+      <td>属于后阶段任务。</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>2 · 能力点视图矩阵</h2>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th style="width:24%">能力点</th>
+      <th style="width:12%">当前判断</th>
+      <th style="width:20%">代表案例</th>
+      <th style="width:14%">主因类型</th>
+      <th style="width:30%">结论</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>CMG 单文件基础黑油往返</td>
+      <td><span class="cap-stable">稳定</span></td>
+      <td><code>mxspe001/002/005/009/010</code></td>
+      <td>-</td>
+      <td>第一批完整成功基线已形成。</td>
+    </tr>
+    <tr>
+      <td>CMG 外部静态文件引用（<code>dat + sip</code>）</td>
+      <td><span class="cap-unstable">不稳定</span></td>
+      <td><code>mxdrm005</code></td>
+      <td><span class="badge b-gen">生成器能力</span></td>
+      <td>IR 已能正式表达，但结构化写回尚未打通。</td>
+    </tr>
+    <tr>
+      <td>CMG 运行时链式依赖（<code>FLXB-IN</code>）</td>
+      <td><span class="cap-fail">失败</span></td>
+      <td><code>mxgeo008/010/012</code></td>
+      <td><span class="badge b-gen">生成器能力</span></td>
+      <td>依赖已有正式落点，但装配链路还未工程化。</td>
+    </tr>
+    <tr>
+      <td>CMG 批量保真回写</td>
+      <td><span class="cap-unstable">可用但不等于工程化</span></td>
+      <td><code>cmb/drm/flu/frr/nwp/hrw/多数 geo</code></td>
+      <td>-</td>
+      <td>证明链路能走通，但还不能等价理解为工程型 IR 已成熟。</td>
+    </tr>
+    <tr>
+      <td>Eclipse / Petrel 常规规则网格黑油</td>
+      <td><span class="cap-unstable">已有基线</span></td>
+      <td><code>SPE1/2/5/6/9</code>、<code>BIG3D3P</code></td>
+      <td><span class="badge b-fmt">格式覆盖</span></td>
+      <td>方向已验证，但尚未完全结构化支持。</td>
+    </tr>
+    <tr>
+      <td><code>EQUALS/COPY/MULTIPLY</code> 属性编辑语义</td>
+      <td><span class="cap-unstable">正从失败转向可用</span></td>
+      <td><code>BASE_WATER</code></td>
+      <td><span class="badge b-fmt">格式覆盖</span></td>
+      <td>2026-03-31 已修 parser 核心问题。</td>
+    </tr>
+    <tr>
+      <td><code>ACTNUM</code> / active-null cell 语义</td>
+      <td><span class="cap-missing">缺失</span></td>
+      <td><code>BIG3D3P</code>、<code>BASE_WATER</code>、<code>BRILLIG*</code></td>
+      <td><span class="badge b-fmt">格式覆盖</span> <span class="badge b-val">校验规则</span></td>
+      <td>parser、IR、validator 还没有共享 active/null 语义。</td>
+    </tr>
+    <tr>
+      <td><code>COORD/ZCORN</code> corner-point grid</td>
+      <td><span class="cap-fail">当前硬边界</span></td>
+      <td><code>API_INJ</code>、<code>BRILLIG*</code>、<code>BRINETRACER</code></td>
+      <td><span class="badge b-fmt">格式覆盖</span> <span class="badge b-gen">生成器能力</span></td>
+      <td>这是当前最明确的一条能力边界。</td>
+    </tr>
+    <tr>
+      <td>tracer / API tracking / salt / chemical 模型</td>
+      <td><span class="cap-fail">当前不支持</span></td>
+      <td><code>ALKALINE_ASP</code>、<code>API_TRACK</code>、<code>BRINETRACER</code></td>
+      <td><span class="badge b-gen">生成器能力</span></td>
+      <td>问题不只是缺字段，而是目标语义链路尚未建立。</td>
+    </tr>
+    <tr>
+      <td>零孔隙度 / null block 校验</td>
+      <td><span class="cap-unstable">当前偏严</span></td>
+      <td><code>mxgeo004/006</code>、<code>BRILLIG*</code></td>
+      <td><span class="badge b-val">校验规则</span></td>
+      <td>validator 还没有 active/null block 语义。</td>
+    </tr>
+    <tr>
+      <td>工程案例边界（root file / 静态输入 / runtime I/O）</td>
+      <td><span class="cap-unstable">已初步建立</span></td>
+      <td><code>mxdrm005</code>、<code>mxgeo008</code></td>
+      <td><span class="badge b-ir">IR表达</span></td>
+      <td><code>case_manifest</code> 已落地，但生成端尚未完全吃透。</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>3 · 当前最重要的边界判断</h2>
+<ul>
+  <li><strong>链路可以走通</strong>这件事已经被证明。</li>
+  <li><strong>系统仍主要停留在案例型能力阶段</strong>，还不是工程型能力阶段。</li>
+  <li><strong>IR 升级 v1.0 已经迈出关键一步</strong>：<code>ref</code> 解决“值来自外部文件怎么存”，<code>case_manifest</code> 解决“案例依赖怎么存”。</li>
+  <li>所以现在更真实的说法是：<strong>系统已从“IR 表达缺失”推进到“生成器能力缺口更突出”的阶段。</strong></li>
+</ul>
+
+<div class="conclusion">
+  <p>当前系统已经证明“链路可以走通”，但距离“工程型 IR + 明确失败归因 + 大规模稳定互转”还有明显架构差距。</p>
+</div>
+
+<h2>4 · 下一步任务—影响案例—预期收益</h2>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th style="width:26%">任务</th>
+      <th style="width:28%">直接影响案例</th>
+      <th style="width:46%">预期收益</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>完成 <code>ref</code> 的结构化写回 / 展开</td>
+      <td><code>mxdrm005</code></td>
+      <td>从“保真成功”推进到“完整成功”。</td>
+    </tr>
+    <tr>
+      <td>完成 <code>FLXB-IN</code> 运行时装配工程化</td>
+      <td><code>mxgeo008/010/012</code></td>
+      <td>从“失败”推进到“可稳定运行”。</td>
+    </tr>
+    <tr>
+      <td>校验器拆层 + active/null cell 语义</td>
+      <td><code>mxgeo004/006</code>、<code>BIG3D3P</code>、<code>BRILLIG*</code></td>
+      <td>失败原因会更清晰，null block 不再被误杀。</td>
+    </tr>
+    <tr>
+      <td>补齐 <code>DXV/DYV</code>、<code>GRAVITY</code>、<code>PVDO+PVDG</code></td>
+      <td><code>BASE_WATER</code></td>
+      <td>从“部分成功”继续推向“完整成功”。</td>
+    </tr>
+    <tr>
+      <td>建立 <code>COORD/ZCORN</code> 正式路径</td>
+      <td><code>API_INJ</code>、<code>BRILLIG*</code>、<code>BRINETRACER</code></td>
+      <td>打开当前最硬的一条能力边界。</td>
+    </tr>
+    <tr>
+      <td>在 corner-point 基础上补 tracer / API / salt / chemical</td>
+      <td><code>API_TRACK</code>、<code>BRINETRACER</code>、<code>ALKALINE_ASP</code></td>
+      <td>进入后续高级物理支持阶段。</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+</div>
+</body>
+</html>

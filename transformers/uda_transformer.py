@@ -14,6 +14,49 @@ from business_rules import (
 )
 
 
+def _infer_active_cell_mask(raw: Dict[str, Any], grid: Dict[str, Any], reservoir: Dict[str, Any]) -> Dict[str, Any]:
+    if grid.get("active_cell_mask") is not None:
+        return grid
+
+    meta = raw.get("meta", {}) or {}
+    raw_lines = meta.get("_cmg_raw_deck_lines") or []
+    if not isinstance(raw_lines, list) or not raw_lines:
+        return grid
+
+    has_null_block_hint = any(
+        phrase in str(line).lower()
+        for line in raw_lines
+        for phrase in ("null block", "null blocks", "zero value porosity grid", "zero value porosity grids")
+    )
+    if not has_null_block_hint:
+        return grid
+
+    porosity = reservoir.get("porosity") or {}
+    if not (isinstance(porosity, dict) and porosity.get("type") == "array" and isinstance(porosity.get("values"), list)):
+        return grid
+
+    values = porosity.get("values") or []
+    if not values or not any(float(v) == 0.0 for v in values):
+        return grid
+
+    inferred = {
+        "type": "array",
+        "values": [0.0 if float(v) == 0.0 else 1.0 for v in values],
+        "unit": "",
+        "grid_order": porosity.get("grid_order", "IJK"),
+        "confidence": min(float(porosity.get("confidence", 0.8) or 0.8), 0.8),
+        "source": "transformer.infer_active_cell_mask_from_zero_porosity",
+        "source_format_hint": {
+            "software": "cmg_imex",
+            "policy": "zero_porosity_null_block",
+        },
+    }
+    grid = dict(grid)
+    grid["active_cell_mask"] = inferred
+    grid["cell_activity_mode"] = "inferred_from_zero_porosity"
+    return grid
+
+
 def _build_timeline_events(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
     events: List[Dict[str, Any]] = []
     for well in raw.get("wells", []):
@@ -46,6 +89,7 @@ def transform_raw_to_standard(raw: Dict[str, Any]) -> Dict[str, Any]:
     grid = dict(raw.get("grid", {}))
     reservoir = resolve_equalsi_references(dict(raw.get("reservoir", {})))
     reservoir = apply_radial_perm_j(grid, reservoir)
+    grid = _infer_active_cell_mask(raw, grid, reservoir)
     fluid = dict(raw.get("fluid", {}))
     rockfluid = dict(raw.get("rockfluid", {}))
     initial = dict(raw.get("initial", {}))
@@ -72,6 +116,7 @@ def transform_raw_to_standard(raw: Dict[str, Any]) -> Dict[str, Any]:
             **dict(raw.get("meta", {})),
             **({"_total_sim_time": raw.get("_total_sim_time")} if raw.get("_total_sim_time") is not None else {}),
         },
+        case_manifest=dict(raw.get("case_manifest", {})),
         grid=grid,
         reservoir=reservoir,
         fluid=fluid,
