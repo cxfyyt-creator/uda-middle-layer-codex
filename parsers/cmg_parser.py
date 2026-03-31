@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.rule_loader import get_loader
 from utils.reporting import write_report_bundle
 from utils.cmg_case_dependencies import scan_cmg_case_dependencies
+from utils.project_paths import JSON_OUTPUT_DIR, PARSER_REPORTS_DIR
 from utils.pvt_metadata import apply_pvt_role
 from utils.value_semantics import apply_value_semantics
 
@@ -1167,7 +1168,7 @@ class CMGParser:
 
 # ── 对外接口 ──────────────────────────────────────────────────────────────────
 
-def parse_cmg(filepath, output_json=None, report_dir="outputs/reports/parsers"):
+def parse_cmg(filepath, output_json=None, report_dir=PARSER_REPORTS_DIR):
     r = CMGParser(filepath).parse()
     if output_json:
         Path(output_json).parent.mkdir(parents=True, exist_ok=True)
@@ -1213,7 +1214,7 @@ if __name__ == "__main__":
     default_input = Path("inputs/cmg/mxspe001.dat")
     f = Path(sys.argv[1]) if len(sys.argv) > 1 else default_input
 
-    out_dir = Path("outputs/json")
+    out_dir = JSON_OUTPUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{f.stem}_parsed.json"
 

@@ -44,7 +44,7 @@
 - `main.py` 已统一接入 `parse-petrel`、`parse-cmg`、`generate-cmg`、`generate-petrel`
 - `transform_raw_to_standard()` 已接入主流程
 - `validate_standard_model()` 已作为主路径校验闸门
-- 解析与生成报告已写入 `outputs/reports/`
+- 解析与生成报告已写入 `output/generated/reports/`
 
 ### 3.2 已跑通样例
 
@@ -98,22 +98,22 @@
 ## 6. 推荐命令
 
 ```bash
-python main.py parse-petrel inputs/petrel/SPE1_ODEHIMPLI.DATA -o outputs/json/
-python main.py generate-cmg outputs/json/SPE1_ODEHIMPLI_parsed.json -o outputs/cmg/
+python main.py parse-petrel inputs/petrel/SPE1_ODEHIMPLI.DATA -o output/generated/json/
+python main.py generate-cmg output/generated/json/SPE1_ODEHIMPLI_parsed.json -o output/generated/cmg/
 
-python main.py parse-petrel inputs/petrel/SPE2_CHAP.DATA -o outputs/json/
-python main.py generate-cmg outputs/json/SPE2_CHAP_parsed.json -o outputs/cmg/
+python main.py parse-petrel inputs/petrel/SPE2_CHAP.DATA -o output/generated/json/
+python main.py generate-cmg output/generated/json/SPE2_CHAP_parsed.json -o output/generated/cmg/
 
-python main.py parse-cmg inputs/cmg/mxspe002.dat -o outputs/json/
-python main.py generate-petrel outputs/json/mxspe002_parsed.json -o outputs/petrel/
+python main.py parse-cmg inputs/cmg/mxspe002.dat -o output/generated/json/
+python main.py generate-petrel output/generated/json/mxspe002_parsed.json -o output/generated/petrel/
 ```
 
 ---
 
 ## 7. 文档约定
 
-- 当前主文档：`docs/PROJECT_CONTEXT.md`
-- 当前开发路线：`docs/REFACTOR_CHECKLIST.md`
+- 当前主文档：`docs/project/PROJECT_CONTEXT.md`
+- 当前开发路线：`docs/project/REFACTOR_CHECKLIST.md`
 - 历史归档文档：`docs/archive/project_context_1_legacy.md`
 
 不再维护多个“current context”并行文档，避免信息分叉。

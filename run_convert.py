@@ -10,9 +10,11 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "parsers"))
 sys.path.insert(0, str(ROOT / "generators"))
+sys.path.insert(0, str(ROOT))
 
 from petrel_parser import parse_petrel
 from cmg_generator import generate_cmg
+from utils.project_paths import CMG_OUTPUT_DIR, JSON_OUTPUT_DIR
 
 def main():
     if len(sys.argv) < 2:
@@ -26,8 +28,8 @@ def main():
         sys.exit(1)
 
     # 创建输出目录
-    json_dir = ROOT / "outputs" / "json"
-    cmg_dir  = ROOT / "outputs" / "cmg"
+    json_dir = JSON_OUTPUT_DIR
+    cmg_dir  = CMG_OUTPUT_DIR
     json_dir.mkdir(parents=True, exist_ok=True)
     cmg_dir.mkdir(parents=True, exist_ok=True)
 

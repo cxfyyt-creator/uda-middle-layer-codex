@@ -15,17 +15,20 @@
 ## 快速开始
 
 ```bash
-python main.py parse-petrel inputs/petrel/SPE1_ODEHIMPLI.DATA -o outputs/json/
-python main.py generate-cmg outputs/json/SPE1_ODEHIMPLI_parsed.json -o outputs/cmg/
+python main.py parse-petrel inputs/petrel/SPE1_ODEHIMPLI.DATA -o output/generated/json/
+python main.py generate-cmg output/generated/json/SPE1_ODEHIMPLI_parsed.json -o output/generated/cmg/
 
-python main.py parse-cmg inputs/cmg/mxspe002.dat -o outputs/json/
-python main.py generate-petrel outputs/json/mxspe002_parsed.json -o outputs/petrel/
+python main.py parse-cmg inputs/cmg/mxspe002.dat -o output/generated/json/
+python main.py generate-petrel output/generated/json/mxspe002_parsed.json -o output/generated/petrel/
 ```
 
 ## 目录说明
 
 - `inputs/`：原始输入文件
-- `outputs/`：转换结果和报告产物
+- `output/`：统一产物根目录
+  - `generated/`：日常转换结果与报告
+  - `deliverables/`：正式交付文件
+  - `tmp_tests/`：测试临时产物
 - `parsers/`：Petrel / CMG 解析器
 - `transformers/`：原始解析结果到标准模型的转换
 - `validators/`：标准模型校验
@@ -35,12 +38,12 @@ python main.py generate-petrel outputs/json/mxspe002_parsed.json -o outputs/petr
 
 ## 当前文档
 
-- 主上下文：`docs/PROJECT_CONTEXT.md`
-- 开发路线：`docs/REFACTOR_CHECKLIST.md`
+- 主上下文：`docs/project/PROJECT_CONTEXT.md`
+- 开发路线：`docs/project/REFACTOR_CHECKLIST.md`
 - 历史归档：`docs/archive/project_context_1_legacy.md`
 
 ## 说明
 
-- `outputs/` 中多数内容是可再生产物
+- `output/` 中多数内容是可再生产物
 - 规则优先落在 `rules/*.yaml`，复杂推导集中在 `business_rules.py`
 - 当前仓库仍包含部分阶段性产物，后续会继续清理

@@ -11,7 +11,12 @@ __pycache__/
 *.tmp
 
 # Runtime outputs and generated artifacts
+input/
+inputs/
+output/
 outputs/
+deliverables/
+.tmp_tests/
 *.out
 *.sr3
 *.log

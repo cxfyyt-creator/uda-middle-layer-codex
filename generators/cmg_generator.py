@@ -14,6 +14,7 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.confidence_checks import evaluate_confidence
 from utils.cmg_case_dependencies import scan_cmg_case_dependencies
+from utils.project_paths import CMG_OUTPUT_DIR, GENERATOR_REPORTS_DIR, JSON_OUTPUT_DIR
 from utils.rule_loader import get_loader
 from utils.reporting import write_report_bundle
 from utils.target_preflight import evaluate_target_preflight
@@ -150,15 +151,28 @@ class CMGGenerator:
             return None
         return text + "\n"
 
-    def _copy_external_file_refs(self, data, output_file):
+    def _runtime_alias_candidates(self, ref):
+        ref_path = Path(ref)
+        if not ref_path.suffix:
+            return []
+        return [ref_path.with_name(f"{ref_path.stem}_converted{ref_path.suffix}")]
+
+    def _materialize_runtime_inputs(self, data, output_file):
+        summary = {
+            "copied": [],
+            "aliased": [],
+            "existing": [],
+            "missing": [],
+            "resolved_paths": [],
+        }
         if not isinstance(data, dict) or not output_file:
-            return
+            return summary
 
         meta = data.get("meta", {}) or {}
         raw_lines = meta.get("_cmg_raw_deck_lines")
         source_dir = meta.get("_cmg_source_dir")
-        if not raw_lines or not source_dir:
-            return
+        if not raw_lines:
+            return summary
 
         dst_root = Path(output_file).parent
         deps = meta.get("_cmg_case_dependencies") or scan_cmg_case_dependencies(raw_lines, source_dir)
@@ -166,16 +180,46 @@ class CMGGenerator:
             ref = item.get("path")
             if not ref:
                 continue
-            src_path = Path(item.get("source_path") or ref)
-            dst_path = dst_root / Path(ref).name
-            if not src_path.exists():
-                continue
-            if src_path.resolve() == dst_path.resolve():
-                continue
+            ref_path = Path(ref)
+            dst_path = dst_root / ref_path
             if dst_path.exists():
+                summary["existing"].append(ref)
+                summary["resolved_paths"].append(ref)
                 continue
-            dst_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src_path, dst_path)
+
+            src_path = Path(item.get("source_path") or ref)
+            if src_path.exists():
+                if str(src_path.resolve()) == str(dst_path.resolve()):
+                    summary["existing"].append(ref)
+                    summary["resolved_paths"].append(ref)
+                    continue
+                dst_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src_path, dst_path)
+                summary["copied"].append({"path": ref, "source": str(src_path)})
+                summary["resolved_paths"].append(ref)
+                continue
+
+            aliased = False
+            for candidate_rel in self._runtime_alias_candidates(ref):
+                candidate_path = dst_root / candidate_rel
+                if not candidate_path.exists():
+                    continue
+                dst_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(candidate_path, dst_path)
+                summary["aliased"].append({"path": ref, "source": candidate_path.name})
+                summary["resolved_paths"].append(ref)
+                aliased = True
+                break
+
+            if aliased:
+                continue
+
+            summary["missing"].append(ref)
+
+        return summary
+
+    def _copy_external_file_refs(self, data, output_file):
+        return self._materialize_runtime_inputs(data, output_file)
 
     def generate(self, data):
         preserved = self._preserved_cmg_deck(data)
@@ -666,7 +710,7 @@ class CMGGenerator:
 
 # ── 对外接口 ──────────────────────────────────────────────────────────────────
 
-def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/generators"):
+def generate_cmg(data_or_json, output_file=None, report_dir=GENERATOR_REPORTS_DIR):
     source_name = str(data_or_json) if isinstance(data_or_json, (str, Path)) else "in_memory_json"
     if isinstance(data_or_json, (str, Path)):
         with open(data_or_json, encoding="utf-8") as f:
@@ -676,6 +720,17 @@ def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/gen
     generator = CMGGenerator()
     preserved_content = generator._preserved_cmg_deck(data) if isinstance(data, dict) else None
     source_faithful = preserved_content is not None
+    out_path = Path(output_file) if output_file else None
+    runtime_resolution = {
+        "copied": [],
+        "aliased": [],
+        "existing": [],
+        "missing": [],
+        "resolved_paths": [],
+    }
+    if out_path and source_faithful and isinstance(data, dict):
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        runtime_resolution = generator._materialize_runtime_inputs(data, out_path)
 
     def _write_failed_report(errors, warnings=None):
         md_path, json_path = write_report_bundle(
@@ -695,6 +750,7 @@ def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/gen
                 "stage": "pre_generation_validation",
                 "preflight": preflight,
                 "confidence_check": confidence_check,
+                "runtime_resolution": runtime_resolution,
             },
         )
         if isinstance(data, dict):
@@ -710,9 +766,13 @@ def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/gen
 
     effective_preflight_blockers = list(preflight["blockers"])
     if source_faithful:
+        resolved_runtime_paths = set(runtime_resolution.get("resolved_paths", []))
         effective_preflight_blockers = [
             item for item in effective_preflight_blockers
-            if str(item).startswith("missing required CMG runtime input:")
+            if (
+                str(item).startswith("missing required CMG runtime input:")
+                and str(item).split(": ", 1)[-1] not in resolved_runtime_paths
+            )
         ]
 
     if effective_preflight_blockers:
@@ -731,13 +791,12 @@ def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/gen
 
     content = preserved_content if preserved_content is not None else generator.generate(data)
 
-    out_path = None
     if output_file:
-        out_path = Path(output_file)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(content)
-        generator._copy_external_file_refs(data, out_path)
+        if not source_faithful:
+            runtime_resolution = generator._copy_external_file_refs(data, out_path)
 
     warnings = []
     wells = data.get("wells", []) if isinstance(data, dict) else []
@@ -747,8 +806,15 @@ def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/gen
         warnings.append("no wells found; WELL DATA section may be empty")
     runtime_inputs = deps.get("runtime_inputs", []) or []
     missing_runtime = deps.get("missing_runtime_inputs", []) or []
+    if runtime_resolution["resolved_paths"]:
+        resolved = set(runtime_resolution["resolved_paths"])
+        missing_runtime = [item for item in missing_runtime if item.get("path") not in resolved]
     if runtime_inputs:
         warnings.append(f"cmg case runtime inputs detected: {len(runtime_inputs)}")
+    if runtime_resolution["copied"]:
+        warnings.append(f"copied runtime inputs: {len(runtime_resolution['copied'])}")
+    if runtime_resolution["aliased"]:
+        warnings.append(f"created runtime aliases: {len(runtime_resolution['aliased'])}")
     for item in missing_runtime:
         warnings.append(f"missing cmg runtime input: {item.get('path')}")
     warnings.extend(f"preflight: {w}" for w in preflight["warnings"][:10])
@@ -777,6 +843,7 @@ def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/gen
             "has_pvdg_table": bool(data.get("fluid", {}).get("pvdg_table")) if isinstance(data, dict) else False,
             "has_pvt_table": bool(data.get("fluid", {}).get("pvt_table")) if isinstance(data, dict) else False,
             "case_dependencies": deps if isinstance(data, dict) else {},
+            "runtime_resolution": runtime_resolution,
             "preflight": preflight,
             "confidence_check": confidence_check,
         },
@@ -788,10 +855,10 @@ def generate_cmg(data_or_json, output_file=None, report_dir="outputs/reports/gen
 
 
 if __name__ == "__main__":
-    default_json = Path("outputs/json/SPE2_CHAP_parsed.json")
+    default_json = JSON_OUTPUT_DIR / "SPE2_CHAP_parsed.json"
     src = Path(sys.argv[1]) if len(sys.argv) > 1 else default_json
 
-    out_dir = Path("outputs/cmg")
+    out_dir = CMG_OUTPUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = Path(src).stem.replace("_parsed", "")
     out = out_dir / f"{stem}_converted.dat"

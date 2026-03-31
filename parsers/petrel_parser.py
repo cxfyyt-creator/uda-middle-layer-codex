@@ -17,6 +17,7 @@ from pathlib import Path
 # 把 utils 目录加入搜索路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.pvt_metadata import apply_pvt_role
+from utils.project_paths import JSON_OUTPUT_DIR, PARSER_REPORTS_DIR
 from utils.rule_loader import get_loader
 from utils.reporting import write_report_bundle
 from utils.value_semantics import apply_value_semantics
@@ -1271,7 +1272,7 @@ class PetrelParser:
 
 # ── 对外接口 ──────────────────────────────────────────────────────────────────
 
-def parse_petrel(filepath, output_json=None, report_dir="outputs/reports/parsers"):
+def parse_petrel(filepath, output_json=None, report_dir=PARSER_REPORTS_DIR):
     r = PetrelParser(filepath).parse()
     if output_json:
         Path(output_json).parent.mkdir(parents=True, exist_ok=True)
@@ -1314,7 +1315,7 @@ if __name__ == "__main__":
     default_input = Path("inputs/petrel/SPE1_ODEHIMPES.DATA")
     fp = Path(sys.argv[1]) if len(sys.argv) > 1 else default_input
 
-    out_dir = Path("outputs/json")
+    out_dir = JSON_OUTPUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{fp.stem}_parsed.json"
 

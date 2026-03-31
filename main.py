@@ -16,6 +16,7 @@ from generators.cmg_generator    import generate_cmg
 from generators.petrel_generator import generate_petrel
 from transformers                 import transform_raw_to_standard
 from validators                   import validate_standard_model
+from utils.project_paths          import CMG_OUTPUT_DIR, JSON_OUTPUT_DIR, PETREL_OUTPUT_DIR
 
 
 def _transform_and_validate(raw):
@@ -31,7 +32,7 @@ def _load_json_file(path: Path):
 
 def cmd_parse_petrel(args):
     src = Path(args.input)
-    out_dir = Path(args.output) if args.output else Path("outputs/json")
+    out_dir = Path(args.output) if args.output else JSON_OUTPUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{src.stem}_parsed.json"
 
@@ -54,7 +55,7 @@ def cmd_parse_petrel(args):
 
 def cmd_parse_cmg(args):
     src = Path(args.input)
-    out_dir = Path(args.output) if args.output else Path("outputs/json")
+    out_dir = Path(args.output) if args.output else JSON_OUTPUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{src.stem}_parsed.json"
 
@@ -75,7 +76,7 @@ def cmd_parse_cmg(args):
 
 def cmd_generate_cmg(args):
     src = Path(args.input)
-    out_dir = Path(args.output) if args.output else Path("outputs/cmg")
+    out_dir = Path(args.output) if args.output else CMG_OUTPUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = src.stem.replace("_parsed", "")
     out = out_dir / f"{stem}_converted.dat"
@@ -90,7 +91,7 @@ def cmd_generate_cmg(args):
 
 def cmd_generate_petrel(args):
     src = Path(args.input)
-    out_dir = Path(args.output) if args.output else Path("outputs/petrel")
+    out_dir = Path(args.output) if args.output else PETREL_OUTPUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = src.stem.replace("_parsed", "")
     out = out_dir / f"{stem}_converted.DATA"

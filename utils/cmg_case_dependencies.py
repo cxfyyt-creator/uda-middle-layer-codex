@@ -8,6 +8,8 @@ from typing import Any, Dict, List
 _RUNTIME_PATTERNS = [
     ("SIPDATA-IN", re.compile(r"(?i)\bSIPDATA-IN\b\s+['\"]([^'\"]+)['\"]")),
     ("BINDATA-IN", re.compile(r"(?i)\bBINDATA-IN\b\s+[\'\"]([^\'\"]+)[\'\"]")),
+    ("*FLXB-IN", re.compile(r"(?i)\*FLXB-IN\b\s+['\"]([^'\"]+)['\"]")),
+    ("FLXB-IN", re.compile(r"(?i)\bFLXB-IN\b\s+['\"]([^'\"]+)['\"]")),
     ("*INCLUDE", re.compile(r"(?i)\*INCLUDE\s+['\"]([^'\"]+)['\"]")),
     ("INCLUDE", re.compile(r"(?i)\bINCLUDE\b\s+['\"]([^'\"]+)['\"]")),
 ]
@@ -20,6 +22,16 @@ _NON_RUNTIME_HINTS = [
     re.compile(r"(?i)\*CASEID\b"),
     re.compile(r"(?i)\*WRST\b"),
 ]
+
+
+def _strip_cmg_comments(line: str) -> str:
+    text = str(line).rstrip()
+    if not text:
+        return ""
+    idx = text.find("**")
+    if idx >= 0:
+        text = text[:idx]
+    return text.rstrip()
 
 
 def scan_cmg_case_dependencies(raw_lines: List[str] | None, source_dir: str | Path | None = None) -> Dict[str, Any]:
@@ -37,7 +49,9 @@ def scan_cmg_case_dependencies(raw_lines: List[str] | None, source_dir: str | Pa
     seen_runtime: set[tuple[str, str]] = set()
 
     for lineno, raw in enumerate(raw_lines, start=1):
-        line = str(raw)
+        line = _strip_cmg_comments(str(raw))
+        if not line.strip():
+            continue
         matched_runtime = False
 
         for dependency_type, pattern in _RUNTIME_PATTERNS:
@@ -45,7 +59,7 @@ def scan_cmg_case_dependencies(raw_lines: List[str] | None, source_dir: str | Pa
                 relpath = match.group(1).strip()
                 if not relpath:
                     continue
-                key = (dependency_type.upper(), relpath)
+                key = (dependency_type.upper().lstrip("*"), relpath)
                 if key in seen_runtime:
                     matched_runtime = True
                     continue

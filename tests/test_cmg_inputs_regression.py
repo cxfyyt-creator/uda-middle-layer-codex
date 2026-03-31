@@ -5,12 +5,13 @@ from pathlib import Path
 from generators.cmg_generator import generate_cmg
 from parsers.cmg_parser import parse_cmg
 from transformers import transform_raw_to_standard
+from utils.project_paths import TMP_TESTS_DIR
 from validators import validate_standard_model
 
 
 ROOT = Path(__file__).resolve().parents[1]
 INPUTS_DIR = ROOT / "inputs" / "cmg"
-TMP_ROOT = ROOT / ".tmp_tests" / "cmg_regression" / datetime.now().strftime("run_%Y%m%d_%H%M%S_%f")
+TMP_ROOT = TMP_TESTS_DIR / "cmg_regression" / datetime.now().strftime("run_%Y%m%d_%H%M%S_%f")
 
 
 CASES = {

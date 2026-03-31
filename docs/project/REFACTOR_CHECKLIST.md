@@ -9,7 +9,7 @@
 - `transformers/uda_transformer.py` 已接入主流程
 - `validators/schema.py` 已接入 `main.py`
 - `business_rules.py` 已承接部分表融合、补全和推导逻辑
-- 解析报告与生成报告已落地到 `outputs/reports/`
+- 解析报告与生成报告已落地到 `output/generated/reports/`
 
 ### 能力层
 

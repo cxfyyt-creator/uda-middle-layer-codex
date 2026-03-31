@@ -13,6 +13,7 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.confidence_checks import evaluate_confidence
 from utils.pvt_metadata import apply_pvt_role
+from utils.project_paths import GENERATOR_REPORTS_DIR, JSON_OUTPUT_DIR, PETREL_OUTPUT_DIR
 from utils.rule_loader import get_loader
 from utils.reporting import write_report_bundle
 from utils.target_preflight import evaluate_target_preflight
@@ -527,7 +528,7 @@ class PetrelGenerator:
 
 # ── 对外接口 ──────────────────────────────────────────────────────────────────
 
-def generate_petrel(data_or_json, output_file=None, report_dir="outputs/reports/generators"):
+def generate_petrel(data_or_json, output_file=None, report_dir=GENERATOR_REPORTS_DIR):
     source_name = str(data_or_json) if isinstance(data_or_json, (str, Path)) else "in_memory_json"
     if isinstance(data_or_json, (str, Path)):
         with open(data_or_json, encoding="utf-8") as f:
@@ -630,10 +631,10 @@ def generate_petrel(data_or_json, output_file=None, report_dir="outputs/reports/
 
 
 if __name__ == "__main__":
-    default_json = Path("outputs/json/mxspe001_parsed.json")
+    default_json = JSON_OUTPUT_DIR / "mxspe001_parsed.json"
     src = Path(sys.argv[1]) if len(sys.argv) > 1 else default_json
 
-    out_dir = Path("outputs/petrel")
+    out_dir = PETREL_OUTPUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = Path(src).stem.replace("_parsed", "")
     out = out_dir / f"{stem}_converted.DATA"
