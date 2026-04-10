@@ -85,20 +85,19 @@
 
 ## 2. 已确认样例记录
 
-### 2.1 CMG GEO 相关
+### 2.1 CMG GEO 样例
 
 | 样例 | 现象 | 直接原因 | 归类 |
 |---|---|---|---|
-| `mxgeo004.dat` | 转换链被挡 | `porosity` 中存在大量 `0.0` | B / E |
-| `mxgeo006.dat` | 转换链被挡 | `porosity` 中存在大量 `0.0` | B / E |
-| `mxgeo008.dat` | 下游运行依赖不稳 | deck 里引用 `mxgeo007.flxb`，实际产物是 `mxgeo007_converted.flxb` | F |
-| `mxgeo010.dat` | 同类问题 | `mxgeo009.flxb` 与 `mxgeo009_converted.flxb` 不一致 | F |
-| `mxgeo012.dat` | 同类问题 | `mxgeo011.flxb` 与 `mxgeo011_converted.flxb` 不一致 | F |
+| `mxgeo004.dat` | 校验失败 | 当前 `porosity` 中出现 `0.0`，但还需要结合 active/null 信息判断这些网格是否真的应视为无效单元 | B / E（已纳入后续修复） |
+| `mxgeo006.dat` | 校验失败 | 当前 `porosity` 中出现 `0.0`，但还需要结合 active/null 信息判断这些网格是否真的应视为无效单元 | B / E（已纳入后续修复） |
+| `mxgeo008.dat` | 运行时依赖检查失败 | 当前 deck 依赖 `mxgeo007.flxb`，而生成链路实际产物名是 `mxgeo007_converted.flxb`，需要做依赖识别 / 映射处理 | F（依赖链问题） |
+| `mxgeo010.dat` | 运行时依赖检查失败 | 当前依赖 `mxgeo009.flxb`，与 `mxgeo009_converted.flxb` 之间还缺少稳定映射规则 | F（依赖链问题） |
+| `mxgeo012.dat` | 运行时依赖检查失败 | 当前依赖 `mxgeo011.flxb`，与 `mxgeo011_converted.flxb` 之间还缺少稳定映射规则 | F（依赖链问题） |
 
 说明：
-- `mxgeo004 / 006` 暴露的是“严格校验不等于真实可运行性”；
-- `mxgeo008 / 010 / 012` 暴露的是“运行时依赖文件名与产物名不一致”。
-
+- `mxgeo004 / 006` 的核心不是普通“坏数据”，而是需要更准确地区分 active/null 单元后再决定是否允许零孔隙度；
+- `mxgeo008 / 010 / 012` 的核心不是主模型缺失，而是案例运行时依赖链和上游产物映射还不够完整。
 ---
 
 ### 2.2 Petrel/Eclipse 中 `a*` 开头样例

@@ -64,7 +64,7 @@ td code, .appendix-list code { background: #f1efe8; padding: 1px 5px; border-rad
 <div class="page">
 
 <h1>能力边界矩阵</h1>
-<div class="subtitle">截至 2026-03-31 · 本页已纳入 2026-03-31 14:20:18 的 IR 升级 v1.0 更新（ref / case_manifest）</div>
+<div class="subtitle">截至 2026-03-31 · 本页按当前方向统一使用 IR / 工程装配口径，不再把 source-faithful 作为主线</div>
 
 <h2>更新记录</h2>
 <div class="table-wrap">
@@ -92,6 +92,11 @@ td code, .appendix-list code { background: #f1efe8; padding: 1px 5px; border-rad
       <td>纳入 IR 升级 v1.0：新增 <code>ref</code>、<code>case_manifest</code>，并让 preflight / generator 初步兼容。</td>
       <td><code>mxdrm005</code> 从“IR 表达缺失”推进到“结构化生成器能力不足”；<code>mxgeo008/010/012</code> 从“依赖无正式落点”推进到“运行时装配/生成器能力问题”。</td>
     </tr>
+        <tr>
+      <td>2026-03-31（geo回跑验证）</td>
+      <td>补入 <code>runtime_outputs</code> / 工程装配分析后，重新生成并回跑 <code>mxgeo004/006/008/010/012</code>。</td>
+      <td><code>mxgeo004/006</code> 与 <code>mxgeo008/010/012</code> 均已从“历史卡点”更新为“工程装配成功，且用户实际运行通过”。</td>
+    </tr>
   </tbody>
 </table>
 </div>
@@ -99,7 +104,7 @@ td code, .appendix-list code { background: #f1efe8; padding: 1px 5px; border-rad
 <h2>状态与原因图例</h2>
 <div class="legend">
   <span class="badge b-full"><span class="dot dot-full"></span>完整成功</span>
-  <span class="badge b-faithful"><span class="dot dot-faithful"></span>保真成功</span>
+  <span class="badge b-faithful"><span class="dot dot-faithful"></span>工程装配成功</span>
   <span class="badge b-partial"><span class="dot dot-partial"></span>部分成功</span>
   <span class="badge b-fail"><span class="dot dot-fail"></span>失败</span>
   <span style="width:1px;background:#ddd;margin:0 4px"></span>
@@ -134,23 +139,23 @@ td code, .appendix-list code { background: #f1efe8; padding: 1px 5px; border-rad
     <tr>
       <td><code>mxcmb001-004</code></td>
       <td>CMG → CMG</td>
-      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
-      <td>仍主要依赖保真回写。</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>工程装配成功</div></td>
+      <td>仍主要依赖案例级装配与已知结构模板。</td>
       <td>-</td>
       <td>2026-03-31 批量 4/4 成功。</td>
     </tr>
     <tr>
       <td><code>mxdrm001-004,006-009</code></td>
       <td>CMG → CMG</td>
-      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
-      <td>仍主要依赖保真回写。</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>工程装配成功</div></td>
+      <td>仍主要依赖案例级装配与已知结构模板。</td>
       <td>-</td>
       <td>2026-03-31 批量 8/8 成功。</td>
     </tr>
     <tr>
       <td><code>mxdrm005</code></td>
       <td>CMG → CMG</td>
-      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>部分成功</div></td>
       <td><code>ref</code> 已进入 IR，但 structured writer 还不会展开 / 写回。</td>
       <td><span class="badge b-gen">生成器能力</span></td>
       <td><code>SIP_DATA</code> 已能解析成 <code>ref</code>，<code>case_manifest</code> 已能正式记录 <code>mxdrm005.sip</code>。</td>
@@ -158,58 +163,58 @@ td code, .appendix-list code { background: #f1efe8; padding: 1px 5px; border-rad
     <tr>
       <td><code>mxflu002-006</code></td>
       <td>CMG → CMG</td>
-      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
-      <td>仍主要依赖保真回写。</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>工程装配成功</div></td>
+      <td>仍主要依赖案例级装配与已知结构模板。</td>
       <td>-</td>
       <td>2026-03-31 批量 5/5 成功。</td>
     </tr>
     <tr>
       <td><code>mxfrr001-031</code></td>
       <td>CMG → CMG</td>
-      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
-      <td>仍主要依赖保真回写。</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>工程装配成功</div></td>
+      <td>仍主要依赖案例级装配与已知结构模板。</td>
       <td>-</td>
       <td>2026-03-31 批量 31/31 成功。</td>
     </tr>
     <tr>
       <td><code>mxnwp001-007</code></td>
       <td>CMG → CMG</td>
-      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
-      <td>仍主要依赖保真回写。</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>工程装配成功</div></td>
+      <td>仍主要依赖案例级装配与已知结构模板。</td>
       <td>-</td>
       <td>用户已反馈运行成功。</td>
     </tr>
     <tr>
       <td><code>mxhrw001-008</code></td>
       <td>CMG → CMG</td>
-      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
-      <td>仍主要依赖保真回写。</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>工程装配成功</div></td>
+      <td>仍主要依赖案例级装配与已知结构模板。</td>
       <td>-</td>
       <td>用户已反馈运行成功。</td>
     </tr>
     <tr>
       <td><code>mxgeo001-007,009,011</code></td>
       <td>CMG → CMG</td>
-      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
-      <td>仍主要依赖保真回写。</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>工程装配成功</div></td>
+      <td>仍主要依赖案例级装配与已知结构模板。</td>
       <td>-</td>
       <td>2026-03-31 批量成功。</td>
     </tr>
     <tr>
       <td><code>mxgeo004/006</code></td>
-      <td>CMG → CMG</td>
-      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功但结构化不稳</div></td>
-      <td>null block / 零孔隙度块校验仍偏硬。</td>
+      <td>CMG -&gt; CMG</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>工程装配成功，且用户实际运行通过</div></td>
+      <td>active/null 语义已放宽到可运行，但结构化路径仍需继续工程化。</td>
       <td><span class="badge b-val">校验规则</span></td>
-      <td>active/null 语义仍未正式打通。</td>
+      <td>已从“零孔隙度 / null block 被拦截”推进到“可稳定回跑”。</td>
     </tr>
     <tr>
       <td><code>mxgeo008/010/012</code></td>
-      <td>CMG → CMG</td>
-      <td><div class="status-cell"><span class="dot dot-fail"></span>失败</div></td>
-      <td><code>FLXB-IN</code> 依赖虽已进入 <code>case_manifest</code>，但运行时装配仍未彻底工程化。</td>
+      <td>CMG -&gt; CMG</td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>工程装配成功，且用户实际运行通过</div></td>
+      <td><code>FLXB-IN</code> 依赖链已能装配跑通，但仍偏工程装配驱动，尚未完全结构化</td>
       <td><span class="badge b-gen">生成器能力</span></td>
-      <td>问题已从“IR 无法表达依赖”推进到“生成器 / 装配层未完全解决”。</td>
+      <td>已从“失败”推进到“可运行”；下一步目标是从装配成功升级为完整结构化成功。</td>
     </tr>
     <tr>
       <td><code>SPE1_ODEHIMPES / SPE1_ODEHIMPLI / SPE2_CHAP / SPE2_CHAPLOAD / SPE2_CHAPRST / SPE5_MISCIBLE / SPE6_FRAC / SPE9</code></td>
@@ -222,7 +227,7 @@ td code, .appendix-list code { background: #f1efe8; padding: 1px 5px; border-rad
     <tr>
       <td><code>BIG3D3P</code></td>
       <td>Petrel / Eclipse → CMG</td>
-      <td><div class="status-cell"><span class="dot dot-faithful"></span>保真成功</div></td>
+      <td><div class="status-cell"><span class="dot dot-faithful"></span>工程装配成功</div></td>
       <td><code>ACTNUM</code> 等语义尚未完全结构化。</td>
       <td><span class="badge b-fmt">格式覆盖</span></td>
       <td>能跑，但还不是完全工程化支持。</td>
@@ -314,7 +319,7 @@ td code, .appendix-list code { background: #f1efe8; padding: 1px 5px; border-rad
       <td>依赖已有正式落点，但装配链路还未工程化。</td>
     </tr>
     <tr>
-      <td>CMG 批量保真回写</td>
+      <td>CMG 批量工程装配</td>
       <td><span class="cap-unstable">可用但不等于工程化</span></td>
       <td><code>cmb/drm/flu/frr/nwp/hrw/多数 geo</code></td>
       <td>-</td>
@@ -399,7 +404,7 @@ td code, .appendix-list code { background: #f1efe8; padding: 1px 5px; border-rad
     <tr>
       <td>完成 <code>ref</code> 的结构化写回 / 展开</td>
       <td><code>mxdrm005</code></td>
-      <td>从“保真成功”推进到“完整成功”。</td>
+      <td>从“工程装配成功”推进到“完整成功”。</td>
     </tr>
     <tr>
       <td>完成 <code>FLXB-IN</code> 运行时装配工程化</td>

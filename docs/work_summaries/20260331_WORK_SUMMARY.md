@@ -1,144 +1,93 @@
-# 2026-03-31 工作总结
+# 2026-03-31 工作总结（按 2026-03-31 当前方向重写）
 
-说明：本文按用户指定日期 **2026-03-31** 记录。
+说明：这份文档不再把 2026-03-31 理解成“CMG source-faithful roundtrip 阶段总结”，而是按当前仓库方向，重新定位为 **IR v1.0 + 工程依赖表达 + 分层 preflight** 的阶段总结。
 
-## 1. 今日主线
+## 1. 核心结论
 
-今天的工作主线从“继续跑案例”转向了“把系统能力边界和工程化缺口讲清楚并开始补核心能力”。整体上分成四块：一是继续做 Petrel→CMG 与 CMG 往返验证，整理失败类型；二是补能力边界矩阵与失败记录；三是正式推进 IR 升级 v1.0；四是开始把校验/依赖链做得更工程化，而不是只停留在单个 case 能不能跑通。
+2026-03-31 这一阶段真正建立起来的，不是“dat 到 dat 的保真回写能力”，而是三件更重要的事：
+1. `ref` 进入标准模型，外部文件引用终于有正式位置；
+2. `case_manifest` 进入正式结构，案例级静态输入、运行时输入、运行时输出终于有正式位置；
+3. `preflight` 开始能按层归因，失败不再只是“生成失败”，而能更清楚地区分解析器、IR、生成器和校验层。
 
-## 2. 案例验证与失败整理
+所以，这一天的价值应当定义为：**项目开始从案例修补转向工程型 IR 建设。**
 
-今天先继续做了 `inputs/petrel/` 中案例的转换验证，重点试了 a 开头、b 开头的数据文件，并对失败原因做了归纳。结论不是“单纯某个案例坏了”，而是当前系统里同时存在几类不同性质的问题：
+## 2. 当前仓库已对应的落点
 
-- **格式覆盖问题**：某些关键字/写法解析器还没真正读到；
-- **IR 表达问题**：读到了，但中间层没有正式位置表达；
-- **生成器能力问题**：IR 里有了，但目标生成器还写不出来；
-- **校验规则问题**：数据并非一定错误，但被当前校验规则拦住。
+### 2.1 IR v1.0 已落到代码
+- `validators/schema.py`：已有 `RefValue`、`CaseDependencyItem`、`CaseManifestBlock`。
+- `models/standard_model.py`：已有 `case_manifest`、`timeline_events`、`unparsed_blocks`。
+- `parsers/cmg_parser.py`：已能识别 `SIP_DATA`、`BINARY_DATA`、`*EQUALSI`，并构建 `case_manifest`。
+- `transformers/uda_transformer.py`：统一组装标准模型。
+- `generators/cmg_generator.py`：结构化生成路径已接入 `ref`、运行时依赖装配与报告。
 
-围绕这些问题，今天补写了失败记录文档，目的不是只记“哪个案例失败”，而是把失败映射到“属于哪一类系统问题”，方便后续按类型处理，而不是继续一案一补丁。
+### 2.2 `case_manifest` 已不只是输入清单
+当前 `case_manifest` 已正式包含：
+- `root_file`
+- `source_dir`
+- `static_inputs`
+- `runtime_inputs`
+- `runtime_outputs`
 
-## 3. 能力边界矩阵更新
+并且 `runtime_outputs` 已用于：
+- 上下游案例装配分析
+- preflight 依赖提示
+- 生成阶段运行时文件补齐
 
-今天继续完善了能力边界矩阵，并按你的要求改成中文可读版本，且开始把它从“现状记录”往“决策工具”方向推。当前矩阵的核心价值有两点：
-
-1. 能清楚区分哪些案例已经是**完整成功**，哪些只是**保真成功**，哪些是**失败**；
-2. 能把每个失败点对应到后续优先任务，例如：
-   - `ref` 值类型补齐后，哪些案例能从保真成功升级为完整成功；
-   - 校验器拆层后，哪些案例不再被误杀；
-   - 依赖链表达补齐后，哪些带外部文件的案例会被解锁。
-
-今天实际更新/补充的相关文档包括：
-
-- `docs/CAPABILITY_BOUNDARY_MATRIX.html`
-- `docs/project/MATRIX.md`
-- `docs/project/FAILURE_RECORD.md`
-
-## 4. IR 升级 v1.0：已落地的内容
-
-今天不是只讨论 IR，而是已经开始把 IR 升级做进代码里了。当前已落地的核心点如下。
-
-### 4.1 引入 `ref` 值类型
-
-在原有 `scalar / array / table` 之外，正式补入了 `ref`，用于表达“这个值不是内联数据，而是引用外部文件中的数据集”。这一步主要是为 CMG 的 `SIP_DATA`、`BINARY_DATA`、`*EQUALSI` 这类场景准备正式表达位置。
-
-当前效果：
-
-- `mxdrm005` 这类 `dat + sip` 案例，解析后不再只能依赖临时私有字段，而是可以在 IR 里保留“外部引用”的语义；
-- 结构化 CMG 生成路径已经能回写一部分受支持的 `ref` 类型。
-
-### 4.2 引入 `case_manifest`
-
-今天也把案例级依赖关系从零散 `meta` 私有字段里往正式结构迁移，新增了 `case_manifest`，用于表达：
-
-- 根文件是谁；
-- 静态输入有哪些；
-- 运行时输入有哪些；
-- 后续可以继续扩成运行时输出有哪些。
-
-这一步的意义是：中间层开始不只描述“模型内容”，也开始描述“一个工程案例由哪些文件组成”。
-
-## 5. 校验层与 preflight 拆层
-
-今天继续推进了校验器拆层和 preflight 分层。现在的目标不再是统一报“生成失败”，而是尽量回答清楚失败属于哪类原因。当前 preflight 已经按层输出信息，包含：
-
+### 2.3 preflight 已形成分层输出
+当前 `utils/target_preflight.py` 已能输出：
 - `format_coverage`
+- `ir_expression`
 - `generator_capability`
 - `validation_rule`
-- `completeness`
 
-同时也开始输出原因类型汇总，方便后续把某个案例的失败直接归到“格式覆盖 / IR 表达 / 生成器能力 / 校验规则”四大类之一。
+并补充：
+- `headline`
+- `plain_message`
+- `next_action`
 
-这一步很关键，因为它决定了后面扩案例时，是不是还能快速定位问题，而不是每来一个新案例都重新猜。
+这意味着系统开始具备“失败可解释”的雏形。
 
-## 6. active cell / null block 语义补强
+### 2.4 active/null 与 FLXB 两条工程链已经接上
+- `active_cell_mask / pinchout_array / cell_activity_mode` 已落到解析、转换、校验链。
+- `FLXB-IN / FLXB-OUT` 已进入依赖扫描、case 装配分析、preflight 报错和生成期补齐链路。
 
-今天还补了一块很重要但很工程化的内容：对 `zero porosity / null block / pinchout` 这类网格语义的处理。
+## 3. 这次方向校正后，哪些东西已经变化
 
-之前像 `mxgeo004`、`mxgeo006` 这类案例会因为 0 孔隙度格块被直接判错；今天做完后，系统开始区分：
+现在已经明确：**CMG→CMG 不再以 source-faithful 为主线。** 当前代码已同步做了这件事：
+- 删除了 `tests/test_cmg_source_faithful_roundtrip.py`；
+- `parsers/cmg_parser.py` 不再把原始 deck 文本、source dir、roundtrip mode 写进 `meta`；
+- `generators/cmg_generator.py` 不再走 preserved deck 回写，而是统一走结构化生成；
+- `utils/target_preflight.py` 不再给 source-faithful 特判放行；
+- 相关测试已改成围绕结构化生成、`ref`、`case_manifest`、`FLXB` 依赖链和 preflight 分层来验证。
 
-- **活跃单元中的 0 孔隙度**：仍然视为问题；
-- **非活跃/null/pinchout 单元中的 0 孔隙度**：允许存在。
+换句话说，`CMG -> JSON -> CMG` 现在只作为 **解析器 / IR / 生成器局部能力测试**，不再作为项目最终目标。
 
-配套改动包括：
+## 4. 这一天最该保留的项目理解
 
-- IR 中补了 `active_cell_mask`、`pinchout_array`、`cell_activity_mode`；
-- 解析/映射中补了 `NULL`、`PINCHOUTARRAY`；
-- 校验器里开始按 active/inactive 语义做物理检查。
+如果用最简单的话说，这一天最重要的收获不是“我们能不能把 dat 原样写回去”，而是：
+- 我们开始知道哪些信息应该进 IR；
+- 我们开始知道哪些失败属于解析器，哪些属于生成器；
+- 我们开始知道一个案例不只是模型字段，还包括依赖文件和运行时产物。
 
-这意味着 `mxgeo004`、`mxgeo006` 这类案例，不再因为“把 null block 当成普通活跃格块检查”而被误挡。
+这三点，才是后面做跨软件工程级转换的基础。
 
-## 7. FLXB 依赖链处理
+## 5. 当前最直接的下一步
 
-今天最后一块推进的是 GEO 里的 `FLXB-IN` 依赖链问题，也就是 `mxgeo008 / 010 / 012` 这类“下游案例依赖上游案例产物”的情况。
+按现在的方向，下一步最具体的事应该是：
+1. 继续补 `ref` 的结构化写回，让 `mxdrm005` 真正从“能表达”推进到“能生成”；
+2. 继续补 `FLXB-IN` 的工程装配，让 `mxgeo008/010/012` 从“装配能跑”推进到“结构化稳定”；
+3. 继续把外部数组、引用型 payload、corner-point 等内容正式放进 IR，而不是再回到原文保留思路；
+4. 把当前文档口径统一成“IR / 工程依赖 / 分层失败归因”，不再混用“保真回写主线”的旧说法。
 
-这次没有去硬改案例本身，而是从系统层面补了三件事：
+## 6. 本次核对涉及的关键文件
 
-1. 系统现在能识别某个缺失的 `.flxb` 是由哪个上游 case 产出的；
-2. preflight 报错会带上上游 case 和预期产物信息，不再只是笼统报“缺文件”；
-3. source-faithful 路径下，如果目录里已有上游生成的 `*_converted.flxb`，系统可以自动为下游 case 补出它想要的 `.flxb` 别名文件。
-
-简单说，就是以前这里只会报“缺 `mxgeo007.flxb`”；现在系统已经开始知道“它其实应该来自 `mxgeo007.dat` 跑出来的 `mxgeo007_converted.flxb`”。
-
-## 8. 测试与验证结果
-
-今天补了并跑通了多组测试，覆盖了：
-
-- IR 升级 v1.0
-- preflight 分层
-- active cell 校验
-- FLXB 依赖链
-- source-faithful roundtrip
-
-本轮结束时，相关测试结果为：
-
-- `18 passed`
-
-这说明今天做的不是只停留在讨论层面，而是已经有对应代码和回归测试落地。
-
-## 9. 今日形成的关键认识
-
-今天最重要的不是“又多转了几个案例”，而是把下一阶段主线进一步压实了：
-
-1. 当前系统已经证明“链路能走通”，这点有价值；
-2. 但继续只靠“来一个新案例、修一个具体问题”推进，边际收益在下降；
-3. 下一阶段更重要的是把系统升级成**工程型 IR**，而不是继续停留在**案例型 IR**；
-4. 所谓工程型，不是推翻现有 `grid / fluid / wells / schedule`，而是补上：
-   - 外部数据引用能力；
-   - 案例文件清单与依赖关系表达能力；
-   - 分层校验与失败归因能力。
-
-## 10. 当前仓库状态与建议
-
-截至今天结束，系统已经在以下方向上明显前进一步：
-
-- 能力边界开始可视化、可归因；
-- IR 不再只能表达内联数值；
-- 案例依赖开始进入正式结构；
-- 校验层开始具备“分原因类型说清失败”的雏形；
-- GEO 的 FLXB 链式依赖已经有了工程化处理的第一版。
-
-如果明天继续推进，最自然的主线仍然是两条：
-
-1. 继续把 `case_manifest` 做完整，特别是补 `runtime_outputs`；
-2. 继续把工程型外部文件表达做扎实，让 `dat + sip`、`flxb` 这类场景不再依赖应急逻辑。
-
+- `parsers/cmg_parser.py`
+- `transformers/uda_transformer.py`
+- `validators/schema.py`
+- `generators/cmg_generator.py`
+- `utils/cmg_case_dependencies.py`
+- `utils/target_preflight.py`
+- `tests/test_ir_upgrade_v1.py`
+- `tests/test_flxb_dependency_chain.py`
+- `tests/test_target_preflight_layers.py`
+- `tests/test_active_cell_validation.py`

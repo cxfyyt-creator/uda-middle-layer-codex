@@ -1,9 +1,9 @@
 import unittest
 from pathlib import Path
 
-from parsers.cmg_parser import parse_cmg
-from transformers import transform_raw_to_standard
-from utils.target_preflight import evaluate_target_preflight
+from source_readers.cmg import parse_cmg
+from standardizers import build_standard_ir
+from checks.readiness import evaluate_target_readiness
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,16 +12,8 @@ MXDRM005 = ROOT / "inputs" / "cmg" / "IMEX" / "drm" / "mxdrm005.dat"
 
 class TestTargetPreflightLayers(unittest.TestCase):
     def test_preflight_returns_layered_structure(self):
-        standard = transform_raw_to_standard(parse_cmg(MXDRM005))
-        standard["meta"] = {
-            **standard.get("meta", {}),
-            "source_software": "petrel_eclipse",
-            "_cmg_roundtrip_mode": "structured",
-        }
-        for key in ("_cmg_raw_deck_lines", "_cmg_source_dir", "_cmg_case_dependencies"):
-            standard["meta"].pop(key, None)
-
-        preflight = evaluate_target_preflight(standard, target="cmg")
+        standard = build_standard_ir(parse_cmg(MXDRM005))
+        preflight = evaluate_target_readiness(standard, target="cmg")
 
         self.assertTrue(preflight["ok"], msg=str(preflight))
         self.assertIn("layers", preflight)
@@ -56,7 +48,7 @@ class TestTargetPreflightLayers(unittest.TestCase):
             "unknown_keywords": {"FOO": []},
         }
 
-        preflight = evaluate_target_preflight(data, target="cmg")
+        preflight = evaluate_target_readiness(data, target="cmg")
 
         self.assertFalse(preflight["ok"])
         self.assertTrue(any(item["reason_type"] == "format_coverage" for item in preflight["issues"]))
@@ -66,6 +58,9 @@ class TestTargetPreflightLayers(unittest.TestCase):
         self.assertGreaterEqual(preflight["reason_summary"]["format_coverage"]["warnings"], 1)
         self.assertGreaterEqual(preflight["reason_summary"]["generator_capability"]["blockers"], 1)
         self.assertGreaterEqual(preflight["reason_summary"]["ir_expression"]["blockers"], 1)
+        self.assertIn("当前主要卡点", preflight["headline"])
+        self.assertIn("生成器", preflight["plain_message"])
+        self.assertIn("ref", preflight["next_action"])
 
 
 if __name__ == "__main__":

@@ -3,12 +3,12 @@ import unittest
 import stat
 from pathlib import Path
 
-from generators.cmg_generator import generate_cmg
-from parsers.cmg_parser import parse_cmg
-from transformers import transform_raw_to_standard
-from utils.target_preflight import evaluate_target_preflight
-from utils.project_paths import TMP_TESTS_DIR
-from validators import validate_standard_model
+from target_writers.cmg import generate_cmg
+from source_readers.cmg import parse_cmg
+from standardizers import build_standard_ir
+from checks.readiness import evaluate_target_readiness
+from infra.project_paths import TMP_TESTS_DIR
+from checks import validate_standard_model
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +37,10 @@ class TestIRUpgradeV1(unittest.TestCase):
             ["mxdrm005.sip"],
         )
         self.assertEqual(manifest.get("runtime_inputs", []), [])
+        self.assertEqual(
+            [item.get("path") for item in manifest.get("runtime_outputs", [])],
+            ["mxdrm005.out", "mxdrm005.sr3", "mxdrm005.rstr.sr3"],
+        )
 
     def test_parse_builds_ref_values_for_sip_data(self):
         raw = parse_cmg(MXDRM005)
@@ -51,7 +55,7 @@ class TestIRUpgradeV1(unittest.TestCase):
         self.assertEqual(reservoir.get("perm_i", {}).get("source_file"), "mxdrm005.sip")
 
     def test_transform_and_schema_keep_case_manifest_and_ref(self):
-        standard = transform_raw_to_standard(parse_cmg(MXDRM005))
+        standard = build_standard_ir(parse_cmg(MXDRM005))
         validate_standard_model(standard, strict=True)
 
         manifest = standard.get("case_manifest", {})
@@ -60,10 +64,16 @@ class TestIRUpgradeV1(unittest.TestCase):
             [item.get("path") for item in manifest.get("static_inputs", [])],
             ["mxdrm005.sip"],
         )
+        self.assertEqual(
+            [item.get("path") for item in manifest.get("runtime_outputs", [])],
+            ["mxdrm005.out", "mxdrm005.sr3", "mxdrm005.rstr.sr3"],
+        )
         self.assertEqual(standard.get("reservoir", {}).get("porosity", {}).get("type"), "ref")
+        self.assertEqual(standard.get("reservoir", {}).get("perm_j", {}).get("type"), "ref")
+        self.assertEqual(standard.get("reservoir", {}).get("perm_j", {}).get("source_format_hint", {}).get("keyword"), "*EQUALSI")
 
-    def test_source_faithful_generation_still_materializes_case_inputs(self):
-        standard = transform_raw_to_standard(parse_cmg(MXDRM005))
+    def test_structured_generation_still_materializes_case_inputs(self):
+        standard = build_standard_ir(parse_cmg(MXDRM005))
         if TMP_DIR.exists():
             _safe_rmtree(TMP_DIR)
         TMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -78,17 +88,8 @@ class TestIRUpgradeV1(unittest.TestCase):
         self.assertIn("PERMI SIP_DATA", content)
 
     def test_structured_backend_can_write_supported_ref_values(self):
-        standard = transform_raw_to_standard(parse_cmg(MXDRM005))
-        standard["meta"] = {
-            **standard.get("meta", {}),
-            "source_software": "petrel_eclipse",
-            "_cmg_roundtrip_mode": "structured",
-        }
-        standard["meta"].pop("_cmg_raw_deck_lines", None)
-        standard["meta"].pop("_cmg_source_dir", None)
-        standard["meta"].pop("_cmg_case_dependencies", None)
-
-        preflight = evaluate_target_preflight(standard, target="cmg")
+        standard = build_standard_ir(parse_cmg(MXDRM005))
+        preflight = evaluate_target_readiness(standard, target="cmg")
         self.assertTrue(preflight["ok"], msg=str(preflight))
 
         if TMP_DIR.exists():

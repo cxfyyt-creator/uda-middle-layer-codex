@@ -3,14 +3,14 @@ from datetime import datetime
 from pathlib import Path
 import re
 
-from generators.cmg_generator import generate_cmg
-from parsers.cmg_parser import parse_cmg
-from transformers import transform_raw_to_standard
-from utils.project_paths import TMP_TESTS_DIR
+from target_writers.cmg import generate_cmg
+from source_readers.cmg import parse_cmg
+from standardizers import build_standard_ir
+from infra.project_paths import TMP_TESTS_DIR
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUTS_DIR = ROOT / "inputs" / "cmg"
+INPUTS_DIR = ROOT / "inputs" / "cmg" / "IMEX" / "cmb"
 TMP_ROOT = TMP_TESTS_DIR / "cmg_combinative" / datetime.now().strftime("run_%Y%m%d_%H%M%S_%f")
 
 
@@ -60,7 +60,7 @@ class TestCMGCombinativeTemplates(unittest.TestCase):
                 self.assertFalse(raw.get("unknown_keywords"), f"{filename} still has unknown keywords")
                 self.assertFalse(raw.get("unparsed_blocks"), f"{filename} still has unparsed blocks")
 
-                standard = transform_raw_to_standard(raw)
+                standard = build_standard_ir(raw)
                 out = tmpdir / f"{src.stem}_roundtrip.dat"
                 content = generate_cmg(
                     standard,

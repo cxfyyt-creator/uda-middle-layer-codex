@@ -2,15 +2,16 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
-from generators.cmg_generator import generate_cmg
-from parsers.cmg_parser import parse_cmg
-from transformers import transform_raw_to_standard
-from utils.project_paths import TMP_TESTS_DIR
-from validators import validate_standard_model
+from target_writers.cmg import generate_cmg
+from source_readers.cmg import parse_cmg
+from standardizers import build_standard_ir
+from target_mappers.cmg import build_cmg_target_ir
+from infra.project_paths import TMP_TESTS_DIR
+from checks import validate_standard_model
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUTS_DIR = ROOT / "inputs" / "cmg"
+INPUTS_DIR = ROOT / "inputs" / "cmg" / "IMEX" / "spe"
 TMP_ROOT = TMP_TESTS_DIR / "cmg_regression" / datetime.now().strftime("run_%Y%m%d_%H%M%S_%f")
 
 
@@ -39,13 +40,14 @@ class TestCMGInputsRegression(unittest.TestCase):
                 self.assertFalse(raw.get("unknown_keywords"), f"{filename} still has unknown keywords")
                 self.assertFalse(raw.get("unparsed_blocks"), f"{filename} still has unparsed blocks")
 
-                standard = transform_raw_to_standard(raw)
+                standard = build_standard_ir(raw)
                 validate_standard_model(standard, strict=True)
+                cmg_target = build_cmg_target_ir(standard)
 
                 self.assertEqual(len(standard.get("wells", [])), expected["wells"])
 
-                fluid = standard.get("fluid", {})
-                rockfluid = standard.get("rockfluid", {})
+                fluid = cmg_target.get("fluid", {})
+                rockfluid = cmg_target.get("rockfluid", {})
 
                 if "pvt_rows" in expected:
                     self.assertEqual(len(fluid.get("pvt_table", {}).get("rows", [])), expected["pvt_rows"])

@@ -1,10 +1,10 @@
 import unittest
 from pathlib import Path
 
-from parsers.cmg_parser import parse_cmg
-from transformers import transform_raw_to_standard
-from utils.target_preflight import evaluate_target_preflight
-from validators import validate_standard_model
+from source_readers.cmg import parse_cmg
+from standardizers import build_standard_ir
+from checks.readiness import evaluate_target_readiness
+from checks import validate_standard_model
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,7 +13,7 @@ GEO_DIR = ROOT / "inputs" / "cmg" / "IMEX" / "geo"
 
 class TestActiveCellValidation(unittest.TestCase):
     def test_explicit_null_and_pinchout_arrays_are_parsed(self):
-        standard = transform_raw_to_standard(parse_cmg(ROOT / "inputs" / "cmg" / "IMEX" / "gro" / "mxgro023.dat"))
+        standard = build_standard_ir(parse_cmg(ROOT / "inputs" / "cmg" / "IMEX" / "gro" / "mxgro023.dat"))
         self.assertEqual(standard.get("grid", {}).get("active_cell_mask", {}).get("type"), "scalar")
         self.assertEqual(standard.get("grid", {}).get("active_cell_mask", {}).get("value"), 1.0)
         self.assertEqual(standard.get("grid", {}).get("pinchout_array", {}).get("type"), "scalar")
@@ -22,7 +22,7 @@ class TestActiveCellValidation(unittest.TestCase):
 
     def test_geo_zero_porosity_null_blocks_are_inferred_and_allowed(self):
         for name in ("mxgeo004.dat", "mxgeo006.dat"):
-            standard = transform_raw_to_standard(parse_cmg(GEO_DIR / name))
+            standard = build_standard_ir(parse_cmg(GEO_DIR / name))
             mask = standard.get("grid", {}).get("active_cell_mask", {})
             self.assertEqual(mask.get("type"), "array", msg=name)
             self.assertEqual(standard.get("grid", {}).get("cell_activity_mode"), "inferred_from_zero_porosity", msg=name)
@@ -73,7 +73,7 @@ class TestActiveCellValidation(unittest.TestCase):
         with self.assertRaises(Exception):
             validate_standard_model(data, strict=True)
 
-        preflight = evaluate_target_preflight(data, target="cmg")
+        preflight = evaluate_target_readiness(data, target="cmg")
         self.assertFalse(preflight["ok"])
         self.assertTrue(any("active cells with zero porosity" in item for item in preflight["blockers"]))
         self.assertTrue(any(item["reason_type"] == "validation_rule" for item in preflight["issues"]))

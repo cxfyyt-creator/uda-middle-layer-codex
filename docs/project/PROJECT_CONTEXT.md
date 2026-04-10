@@ -1,4 +1,4 @@
-﻿# UDA Middle Layer — Current Project Context
+# UDA Middle Layer — Current Project Context
 
 > 更新时间：2026-03-18
 >
@@ -15,25 +15,34 @@
 
 核心流程如下：
 
-`parse -> transform_raw_to_standard -> validate_standard_model -> generate`
+`read -> standardize -> validate -> write`
 
 ---
 
 ## 2. 当前代码结构
 
-- `main.py`：统一 CLI 入口
-- `parsers/`
-  - `petrel_parser.py`
-  - `cmg_parser.py`
-- `transformers/`
-  - `uda_transformer.py`
-- `validators/`
-  - `schema.py`
-- `generators/`
-  - `cmg_generator.py`
-  - `petrel_generator.py`
-- `business_rules.py`：表合并、补全、推导逻辑
-- `rules/`：关键字、单位和结构规则
+- `cli.py`：统一 CLI 入口
+- `source_readers/`
+  - `petrel_reader.py`
+  - `cmg_reader.py`
+- `standardizers/`
+  - `standardize_pipeline.py`
+  - `section_normalizers.py`
+  - `model_assembly.py`
+- `application/`
+  - `parse_service.py`
+  - `standardize_service.py`
+  - `generate_service.py`
+  - `convert_service.py`
+- `checks/`
+  - `schema/standard_model_schema.py`
+- `target_writers/`
+  - `cmg/generate_service.py`
+  - `cmg/writer_pipeline.py`
+  - `petrel/generate_service.py`
+  - `petrel/writer_pipeline.py`
+- `domain_logic/`：表合并、补全、推导逻辑
+- `registries/`：关键字、单位和结构注册表
 
 ---
 
@@ -41,8 +50,8 @@
 
 ### 3.1 主流程
 
-- `main.py` 已统一接入 `parse-petrel`、`parse-cmg`、`generate-cmg`、`generate-petrel`
-- `transform_raw_to_standard()` 已接入主流程
+- `cli.py` 已统一接入 `parse-petrel`、`parse-cmg`、`generate-cmg`、`generate-petrel`
+- `build_standard_ir()` 已接入主流程
 - `validate_standard_model()` 已作为主路径校验闸门
 - 解析与生成报告已写入 `output/generated/reports/`
 
@@ -65,7 +74,7 @@
 
 - `parse-cmg` 仍存在较多 `unknown keyword`
 - 某些样例中井和调度信息进入标准模型不完整
-- 当前主要风险不在“能不能跑”，而在“语义是否保真”
+- 当前主要风险不在“能不能回写原文”，而在“IR 是否能表达工程案例、生成器是否能稳定落地”
 
 ### 4.2 unknown keyword 策略尚未统一
 
@@ -76,7 +85,7 @@
 ### 4.3 标准模型与校验模型尚未完全对齐
 
 - `StandardModel` 已包含 `timeline_events`、`unparsed_blocks`
-- `validators/schema.py` 仍需继续覆盖真实中间层字段
+- `checks/schema/standard_model_schema.py` 仍需继续覆盖真实中间层字段
 
 ### 4.4 自动化回归不足
 
@@ -89,7 +98,7 @@
 
 1. 修复 `cmg_parser` 的井与调度解析
 2. 统一 unknown keyword 的记录和报告策略
-3. 对齐 `StandardModel` 与 `validators/schema.py`
+3. 对齐 `Standard IR` 与 `checks/schema/standard_model_schema.py`
 4. 建立最小回归集，覆盖 `SPE1`、`SPE2`、`SPE5`、`mxspe001`、`mxspe002`
 5. 持续清理工程产物与文档冗余
 
@@ -98,14 +107,14 @@
 ## 6. 推荐命令
 
 ```bash
-python main.py parse-petrel inputs/petrel/SPE1_ODEHIMPLI.DATA -o output/generated/json/
-python main.py generate-cmg output/generated/json/SPE1_ODEHIMPLI_parsed.json -o output/generated/cmg/
+python cli.py parse-petrel inputs/petrel/SPE1_ODEHIMPLI.DATA -o output/generated/json/
+python cli.py generate-cmg output/generated/json/SPE1_ODEHIMPLI_parsed.json -o output/generated/cmg/
 
-python main.py parse-petrel inputs/petrel/SPE2_CHAP.DATA -o output/generated/json/
-python main.py generate-cmg output/generated/json/SPE2_CHAP_parsed.json -o output/generated/cmg/
+python cli.py parse-petrel inputs/petrel/SPE2_CHAP.DATA -o output/generated/json/
+python cli.py generate-cmg output/generated/json/SPE2_CHAP_parsed.json -o output/generated/cmg/
 
-python main.py parse-cmg inputs/cmg/mxspe002.dat -o output/generated/json/
-python main.py generate-petrel output/generated/json/mxspe002_parsed.json -o output/generated/petrel/
+python cli.py parse-cmg inputs/cmg/mxspe002.dat -o output/generated/json/
+python cli.py generate-petrel output/generated/json/mxspe002_parsed.json -o output/generated/petrel/
 ```
 
 ---

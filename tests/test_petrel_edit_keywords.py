@@ -1,15 +1,17 @@
 import shutil
-import tempfile
 import unittest
 from pathlib import Path
 from textwrap import dedent
+from uuid import uuid4
 
-from parsers.petrel_parser import parse_petrel
+from infra.project_paths import TMP_TESTS_DIR
+from source_readers.petrel import parse_petrel
 
 
 class TestPetrelEditKeywords(unittest.TestCase):
     def _parse_text(self, text, name="case.DATA"):
-        tmpdir = Path(tempfile.mkdtemp(prefix="petrel_edit_"))
+        tmpdir = TMP_TESTS_DIR / f"petrel_edit_{uuid4().hex}"
+        tmpdir.mkdir(parents=True, exist_ok=True)
         self.addCleanup(lambda: shutil.rmtree(tmpdir, ignore_errors=True))
         src = tmpdir / name
         src.write_text(dedent(text).strip() + "\n", encoding="utf-8")

@@ -1,4 +1,4 @@
-﻿# 分层重构清单（当前版）
+# 分层重构清单（当前版）
 
 > 目标：保持“规则声明 + 业务规则 + 解析/生成编排 + 校验闭环”的稳定结构。
 
@@ -7,8 +7,8 @@
 ### 架构层
 
 - `transformers/uda_transformer.py` 已接入主流程
-- `validators/schema.py` 已接入 `main.py`
-- `business_rules.py` 已承接部分表融合、补全和推导逻辑
+- `checks/schema/standard_model_schema.py` 已接入 `cli.py`
+- `domain_logic/` 已承接部分表融合、补全和推导逻辑
 - 解析报告与生成报告已落地到 `output/generated/reports/`
 
 ### 能力层
@@ -35,7 +35,7 @@
 
 ### P1：中优先级
 
-4. **继续抽离 WELL / SCHEDULE 语义到 `business_rules.py`**
+4. **继续抽离 WELL / SCHEDULE 语义到 `domain_logic/`**
    - 生成器只负责写格式
    - 语义归一放到规则层和业务层
 
